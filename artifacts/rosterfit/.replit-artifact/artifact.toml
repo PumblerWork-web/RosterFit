@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "RosterFit"
+description = "An offline-first fitness companion for shift workers, with roster-aware streaks, workout logging, achievements, rest timers, charts, and local data import/export."
+version = "1.0.0"
+id = "artifacts/rosterfit"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22364
+
+[services.development]
+run = "pnpm --filter @workspace/rosterfit run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/rosterfit", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/rosterfit/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22364"
+BASE_PATH = "/"

@@ -1,0 +1,125 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --font-sans: var(--app-font-sans);
+  --font-display: var(--app-font-display);
+  --font-mono: var(--app-font-mono);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --background: 244 38% 96%;
+  --foreground: 237 34% 17%;
+  --border: 234 24% 88%;
+  --input: 234 24% 84%;
+  --ring: 170 64% 40%;
+  --card: 0 0% 100%;
+  --card-foreground: 237 34% 17%;
+  --primary: 238 47% 24%;
+  --primary-foreground: 60 86% 85%;
+  --secondary: 170 64% 40%;
+  --secondary-foreground: 238 47% 14%;
+  --muted: 242 29% 92%;
+  --muted-foreground: 236 17% 46%;
+  --accent: 60 86% 72%;
+  --accent-foreground: 238 47% 17%;
+  --destructive: 7 82% 61%;
+  --app-font-sans: 'Plus Jakarta Sans', sans-serif;
+  --app-font-display: 'Space Grotesk', sans-serif;
+  --app-font-mono: 'DM Mono', monospace;
+  --radius: 1rem;
+  --shadow-soft: 0 16px 45px rgba(35, 37, 74, .08);
+  --shadow-lift: 0 20px 55px rgba(35, 37, 74, .14);
+}
+
+.dark {
+  --background: 237 36% 10%;
+  --foreground: 244 38% 94%;
+  --border: 237 25% 23%;
+  --input: 237 25% 27%;
+  --ring: 170 64% 48%;
+  --card: 237 31% 15%;
+  --card-foreground: 244 38% 94%;
+  --primary: 60 86% 72%;
+  --primary-foreground: 237 36% 10%;
+  --secondary: 170 64% 48%;
+  --secondary-foreground: 237 36% 10%;
+  --muted: 237 25% 21%;
+  --muted-foreground: 237 15% 68%;
+  --accent: 7 82% 61%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 7 82% 66%;
+  --shadow-soft: 0 16px 45px rgba(0, 0, 0, .18);
+  --shadow-lift: 0 20px 55px rgba(0, 0, 0, .28);
+}
+
+@layer base {
+  * { @apply border-border; }
+  html { background: hsl(var(--background)); }
+  body { @apply font-sans antialiased bg-background text-foreground; margin: 0; min-width: 320px; }
+  button, input, select, textarea { font: inherit; }
+  button { cursor: pointer; }
+}
+
+@layer utilities {
+  .font-display { font-family: var(--app-font-display); }
+  .font-mono { font-family: var(--app-font-mono); }
+  .text-balance { text-wrap: balance; }
+}
+
+* { scrollbar-width: thin; scrollbar-color: hsl(var(--muted-foreground) / .35) transparent; }
+
+.app-shell { min-height: 100dvh; background:
+  radial-gradient(circle at 88% 2%, hsl(var(--accent) / .18), transparent 24rem),
+  radial-gradient(circle at 0% 70%, hsl(var(--secondary) / .08), transparent 28rem),
+  hsl(var(--background)); }
+.sidebar { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+.sidebar a { color: hsl(var(--primary-foreground) / .62); }
+.sidebar a[data-active="true"] { color: hsl(var(--primary)); background: hsl(var(--accent)); box-shadow: 0 8px 25px hsl(var(--accent) / .16); }
+.card { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); box-shadow: var(--shadow-soft); border-radius: var(--radius); }
+.card input:not([type="checkbox"]):not([type="file"]), .card textarea, .card select { border: 1px solid hsl(var(--border)); border-radius: .75rem; background: hsl(var(--card)); color: hsl(var(--foreground)); padding: .7rem .8rem; outline: none; }
+.card input:focus, .card textarea:focus, .card select:focus { border-color: hsl(var(--secondary)); box-shadow: 0 0 0 3px hsl(var(--secondary) / .14); }
+.card textarea { width: 100%; resize: vertical; }
+.card-lift { transition: transform .22s ease, box-shadow .22s ease; }
+.card-lift:hover { transform: translateY(-3px); box-shadow: var(--shadow-lift); }
+.pressable { transition: transform .18s ease, filter .18s ease; }
+.pressable:hover { filter: brightness(1.04); }
+.pressable:active { transform: scale(.97); }
+.stagger-in { animation: rise-in .5s cubic-bezier(.2,.75,.25,1) both; }
+.stagger-1 { animation-delay: .04s; } .stagger-2 { animation-delay: .09s; } .stagger-3 { animation-delay: .14s; } .stagger-4 { animation-delay: .19s; }
+@keyframes rise-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse-soft { 0%,100% { opacity: .6; } 50% { opacity: 1; } }
+.skeleton { background: linear-gradient(90deg, hsl(var(--muted)), hsl(var(--card)), hsl(var(--muted))); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+.safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+
+@media (max-width: 767px) {
+  .mobile-nav { display: flex; }
+  .content-wrap { padding-bottom: 6.5rem; }
+}
+@media (min-width: 768px) {
+  .mobile-nav { display: none; }
+}

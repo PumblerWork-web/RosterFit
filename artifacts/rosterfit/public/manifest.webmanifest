@@ -1,0 +1,14 @@
+{
+  "name": "RosterFit",
+  "short_name": "RosterFit",
+  "description": "A calm, capable fitness companion for shift workers.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f2fb",
+  "theme_color": "#252653",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
