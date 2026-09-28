@@ -121,8 +121,9 @@ function Topbar() {
   };
   return <header className="flex items-center justify-between gap-4 px-5 pb-3 pt-5 sm:px-8 lg:px-10">
     <div><p className="text-xs font-semibold uppercase tracking-[.16em] text-muted-foreground">{new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date())}</p><h1 className="mt-1 font-display text-2xl font-bold capitalize tracking-tight sm:text-3xl">{title}</h1></div>
-    <div className="flex items-center gap-2">
+     <div className="flex items-center gap-2">
       <span className="hidden items-center gap-2 rounded-full bg-card px-3 py-2 text-xs font-semibold text-muted-foreground shadow-sm sm:flex"><span className="h-2 w-2 rounded-full bg-[hsl(var(--secondary))]" />Saved on this device</span>
+       <Link href="/settings" data-testid="link-topbar-settings" className="pressable grid h-11 w-11 place-items-center rounded-2xl border border-border bg-card text-muted-foreground shadow-sm" aria-label="Open settings"><SettingsIcon size={18} /></Link>
       <button onClick={toggleTheme} data-testid="button-toggle-theme" className="pressable grid h-11 w-11 place-items-center rounded-2xl border border-border bg-card text-muted-foreground shadow-sm" aria-label="Toggle theme">{state.settings.theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</button>
     </div>
   </header>;
