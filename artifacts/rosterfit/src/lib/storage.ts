@@ -21,6 +21,7 @@ export type ExerciseEntry = {
   id: string;
   name: string;
   weight: number;
+  durationMinutes?: number;
   reps: number;
   sets: number;
   notes: string;
