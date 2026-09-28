@@ -5,7 +5,7 @@ import {
   Home, Moon, MoreHorizontal, Pencil, Plus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Sparkles,
   Sun, Target, TimerReset, Trash2, Trophy, Upload, Weight, X, Zap,
 } from 'lucide-react';
-import { activityVolume, dayLabel, formatDate, getSampleState, loadState, makeId, saveState, shiftDate, toDateKey, totalVolume, type Activity, type ActivityKind, type AppState, type ExerciseEntry, type RosterDay, type RosterKind, type Theme, type UnitSystem } from '@/lib/storage';
+import { activityVolume, dayLabel, formatDate, getSampleState, loadState, makeId, saveState, shiftDate, toDateKey, totalVolume, type Activity, type ActivityKind, type AppState, type ExerciseEntry, type ExerciseSet, type RosterDay, type RosterKind, type Theme, type UnitSystem } from '@/lib/storage';
 
 type AppContextValue = { state: AppState; update: (next: Partial<AppState>) => void; reset: () => void };
 const AppData = createContext<AppContextValue | null>(null);
@@ -29,6 +29,16 @@ const findPreviousExercise = (activities: Activity[], name: string, excludeActiv
     .filter(({ exercise }) => exercise.name.trim().toLowerCase() === normalizedName)
     .sort((a, b) => b.activity.loggedAt.localeCompare(a.activity.loggedAt))[0];
 };
+const getExerciseSets = (exercise: ExerciseEntry): ExerciseSet[] => exercise.setDetails?.length
+  ? exercise.setDetails
+  : Array.from({ length: Math.max(1, exercise.sets) }, (_, index) => ({
+    id: `legacy-${exercise.id}-${index}`,
+    weight: exercise.weight,
+    reps: exercise.reps,
+    durationMinutes: exercise.durationMinutes,
+  }));
+const getSetVolume = (set: ExerciseSet) => set.weight * set.reps;
+const getExerciseVolume = (sets: ExerciseSet[]) => sets.reduce((total, set) => total + getSetVolume(set), 0);
 
 function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -217,13 +227,38 @@ function LogPage() {
     setLocation('/log', { replace: true });
   }, [location, setLocation]);
   const resetForm = () => { setEditingId(null); setKind('workout'); setDate(todayKey(state)); setNotes(''); setBodyWeight(''); setNightShift(false); setExercises([]); };
-  const addExercise = () => setExercises((items) => [...items, { id: makeId('exercise'), name: '', weight: 0, reps: 8, sets: 3, notes: '', date, volume: 0 }]);
-  const updateExercise = (id: string, patch: Partial<ExerciseEntry>) => setExercises((items) => items.map((item) => item.id === id ? { ...item, ...patch, volume: Number(patch.weight ?? item.weight) * Number(patch.reps ?? item.reps) * Number(patch.sets ?? item.sets) } : item));
+  const addExercise = () => setExercises((items) => [...items, { id: makeId('exercise'), name: '', weight: 0, reps: 8, sets: 3, setDetails: Array.from({ length: 3 }, () => ({ id: makeId('set'), weight: 0, reps: 8 })), notes: '', date, volume: 0 }]);
+  const updateExercise = (id: string, patch: Partial<ExerciseEntry>) => setExercises((items) => items.map((item) => item.id === id ? { ...item, ...patch, volume: item.setDetails?.length ? getExerciseVolume(item.setDetails) : Number(patch.weight ?? item.weight) * Number(patch.reps ?? item.reps) * Number(patch.sets ?? item.sets) } : item));
+  const updateSet = (exerciseId: string, setId: string, patch: Partial<ExerciseSet>) => setExercises((items) => items.map((item) => {
+    if (item.id !== exerciseId) return item;
+    const nextSets = getExerciseSets(item).map((set) => set.id === setId ? { ...set, ...patch } : set);
+    const firstSet = nextSets[0];
+    return { ...item, setDetails: nextSets, weight: firstSet?.weight ?? 0, reps: firstSet?.reps ?? 0, sets: nextSets.length, durationMinutes: firstSet?.durationMinutes, volume: getExerciseVolume(nextSets) };
+  }));
+  const addSet = (exerciseId: string) => setExercises((items) => items.map((item) => {
+    if (item.id !== exerciseId) return item;
+    const currentSets = getExerciseSets(item);
+    const lastSet = currentSets[currentSets.length - 1];
+    const nextSets = [...currentSets, { id: makeId('set'), weight: lastSet?.weight ?? 0, reps: lastSet?.reps ?? 8, durationMinutes: lastSet?.durationMinutes }];
+    return { ...item, setDetails: nextSets, sets: nextSets.length, volume: getExerciseVolume(nextSets) };
+  }));
+  const removeSet = (exerciseId: string, setId: string) => setExercises((items) => items.map((item) => {
+    if (item.id !== exerciseId) return item;
+    const currentSets = getExerciseSets(item);
+    if (currentSets.length <= 1) return item;
+    const nextSets = currentSets.filter((set) => set.id !== setId);
+    const firstSet = nextSets[0];
+    return { ...item, setDetails: nextSets, weight: firstSet?.weight ?? 0, reps: firstSet?.reps ?? 0, sets: nextSets.length, durationMinutes: firstSet?.durationMinutes, volume: getExerciseVolume(nextSets) };
+  }));
   const startTimer = (seconds: number) => { if (timerRef.current) window.clearInterval(timerRef.current); setTimerChoice(seconds); setRestSeconds(seconds); timerRef.current = window.setInterval(() => setRestSeconds((left) => { if (left <= 1) { if (timerRef.current) window.clearInterval(timerRef.current); return 0; } return left - 1; }), 1000); };
   const customRestSeconds = state.settings.customRestSeconds ?? 75;
   const saveActivity = (event: FormEvent) => {
     event.preventDefault();
-    const cleanExercises = kind === 'workout' ? exercises.filter((item) => item.name.trim()).map((item) => ({ ...item, date, volume: Number(item.weight) * Number(item.reps) * Number(item.sets) })) : [];
+    const cleanExercises = kind === 'workout' ? exercises.filter((item) => item.name.trim()).map((item) => {
+      const setDetails = getExerciseSets(item);
+      const firstSet = setDetails[0];
+      return { ...item, date, setDetails, weight: firstSet?.weight ?? 0, reps: firstSet?.reps ?? 0, sets: setDetails.length, durationMinutes: firstSet?.durationMinutes, volume: getExerciseVolume(setDetails) };
+    }) : [];
     const next: Activity = { id: editingId ?? makeId('activity'), date, loggedAt: new Date().toISOString(), kind, notes, isNightShift: nightShift, exercises: cleanExercises, ...(bodyWeight ? { bodyWeight: Number(bodyWeight) } : {}) };
     update({ activities: editingId ? state.activities.map((item) => item.id === editingId ? next : item) : [next, ...state.activities] });
     setSavedNotice(editingId ? 'Activity updated.' : kind === 'rest' ? 'Rest day counted. Good call.' : 'Saved. That one counts.');
@@ -243,7 +278,7 @@ function LogPage() {
         <div className="grid gap-4 sm:grid-cols-2"><Field label="Logical activity date"><input data-testid="input-activity-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field><Field label="Body weight (optional)"><input data-testid="input-body-weight" type="number" step="0.1" placeholder={`e.g. 78.4 ${state.settings.units}`} value={bodyWeight} onChange={(e) => setBodyWeight(e.target.value)} /></Field></div>
         <div className="mt-4 flex items-center justify-between rounded-2xl bg-[hsl(var(--primary)/.05)] p-3"><div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"><Moon size={17} /></span><div><p className="text-sm font-bold">Night-shift session</p><p className="text-[11px] text-muted-foreground">Tag this if you trained around a shift</p></div></div><button type="button" onClick={() => setNightShift(!nightShift)} data-testid="button-toggle-night-shift" className={cx('h-7 w-12 rounded-full p-1 transition-colors', nightShift ? 'bg-[hsl(var(--secondary))]' : 'bg-muted')}><span className={cx('block h-5 w-5 rounded-full bg-card transition-transform', nightShift && 'translate-x-5')} /></button></div>
         {kind === 'workout' && <div className="mt-6"><div className="mb-3 flex items-center justify-between"><div><h3 className="font-display text-lg font-bold">Exercises</h3><p className="text-xs text-muted-foreground">Volume is weight × reps × sets.</p></div><button type="button" onClick={addExercise} data-testid="button-add-exercise" className="pressable flex min-h-10 items-center gap-2 rounded-xl bg-[hsl(var(--secondary))] px-3 text-xs font-bold text-[hsl(var(--secondary-foreground))]"><Plus size={15} />Add exercise</button></div>
-          <div className="space-y-3">{exercises.map((exercise, index) => { const previous = findPreviousExercise(state.activities, exercise.name, editingId); const previousResult = previous ? previous.exercise.durationMinutes ? `${formatNumber(previous.exercise.durationMinutes)} min` : `${previous.exercise.weight > 0 ? `${formatNumber(previous.exercise.weight)} ${state.settings.units}` : 'bodyweight'} × ${previous.exercise.reps} reps × ${previous.exercise.sets} sets` : ''; return <div key={exercise.id} className="rounded-2xl border border-border bg-muted/45 p-3"><div className="mb-3 flex items-center gap-2"><input data-testid={`input-exercise-name-${exercise.id}`} className="min-h-10 flex-1 bg-transparent px-1 font-bold outline-none placeholder:text-muted-foreground" placeholder={`Exercise ${index + 1}`} value={exercise.name} onChange={(e) => updateExercise(exercise.id, { name: e.target.value })} /><button type="button" onClick={() => setExercises((items) => items.filter((item) => item.id !== exercise.id))} data-testid={`button-remove-exercise-${exercise.id}`} className="grid h-9 w-9 place-items-center rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><X size={16} /></button></div>{previous && <p data-testid={`text-last-exercise-${exercise.id}`} className="mb-3 rounded-xl bg-[hsl(var(--secondary)/.1)] px-3 py-2 text-xs text-muted-foreground"><span className="font-bold text-[hsl(var(--secondary))]">Last time:</span> {previousResult} on {formatDate(previous.activity.date, { month: 'short', day: 'numeric' })}</p>}<div className="grid grid-cols-2 gap-2 sm:grid-cols-4"><MiniNumber label={`Weight (${state.settings.units})`} value={exercise.weight} testId={`input-weight-${exercise.id}`} onChange={(value) => updateExercise(exercise.id, { weight: value })} /><MiniNumber label="Time (min)" value={exercise.durationMinutes ?? 0} testId={`input-duration-${exercise.id}`} onChange={(value) => updateExercise(exercise.id, { durationMinutes: value || undefined })} /><MiniNumber label="Reps" value={exercise.reps} testId={`input-reps-${exercise.id}`} onChange={(value) => updateExercise(exercise.id, { reps: value })} /><MiniNumber label="Sets" value={exercise.sets} testId={`input-sets-${exercise.id}`} onChange={(value) => updateExercise(exercise.id, { sets: value })} /></div><p className="mt-2 text-right font-mono text-[11px] text-muted-foreground">{formatNumber(exercise.volume)} {state.settings.units} volume</p></div>; })}</div>
+          <div className="space-y-3">{exercises.map((exercise, index) => { const previous = findPreviousExercise(state.activities, exercise.name, editingId); const previousSets = previous ? getExerciseSets(previous.exercise) : []; const previousResult = previous ? previousSets.map((set) => set.durationMinutes ? `${formatNumber(set.durationMinutes)} min` : `${set.weight > 0 ? `${formatNumber(set.weight)} ${state.settings.units}` : 'bodyweight'} × ${set.reps}`).join(' · ') : ''; const currentSets = getExerciseSets(exercise); return <div key={exercise.id} className="rounded-2xl border border-border bg-muted/45 p-3"><div className="mb-3 flex items-center gap-2"><input data-testid={`input-exercise-name-${exercise.id}`} className="min-h-10 flex-1 bg-transparent px-1 font-bold outline-none placeholder:text-muted-foreground" placeholder={`Exercise ${index + 1}`} value={exercise.name} onChange={(e) => updateExercise(exercise.id, { name: e.target.value })} /><button type="button" onClick={() => setExercises((items) => items.filter((item) => item.id !== exercise.id))} data-testid={`button-remove-exercise-${exercise.id}`} className="grid h-9 w-9 place-items-center rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><X size={16} /></button></div>{previous && <p data-testid={`text-last-exercise-${exercise.id}`} className="mb-3 rounded-xl bg-[hsl(var(--secondary)/.1)] px-3 py-2 text-xs text-muted-foreground"><span className="font-bold text-[hsl(var(--secondary))]">Last time:</span> {previousResult} on {formatDate(previous.activity.date, { month: 'short', day: 'numeric' })}</p>}<div className="mt-4 rounded-2xl border border-border/70 bg-card/60 p-3"><div className="mb-3 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-muted-foreground">Sets</p><p className="text-[11px] text-muted-foreground">Each set keeps its own numbers.</p></div><button type="button" onClick={() => addSet(exercise.id)} data-testid={`button-add-set-${exercise.id}`} className="pressable flex min-h-9 items-center gap-1 rounded-xl border border-border px-3 text-xs font-bold"><Plus size={14} />Add set</button></div><div className="space-y-2">{currentSets.map((set, setIndex) => <div key={set.id} className="rounded-xl border border-border bg-muted/45 p-2"><div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Set {setIndex + 1}</span><button type="button" onClick={() => removeSet(exercise.id, set.id)} disabled={currentSets.length <= 1} data-testid={`button-remove-set-${exercise.id}-${set.id}`} className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground enabled:hover:bg-destructive/10 enabled:hover:text-destructive disabled:opacity-30"><Trash2 size={13} /></button></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-3"><MiniNumber label={`Weight (${state.settings.units})`} value={set.weight} testId={`input-set-weight-${exercise.id}-${set.id}`} onChange={(value) => updateSet(exercise.id, set.id, { weight: value })} /><MiniNumber label="Time (min)" value={set.durationMinutes ?? 0} testId={`input-set-duration-${exercise.id}-${set.id}`} onChange={(value) => updateSet(exercise.id, set.id, { durationMinutes: value || undefined })} /><MiniNumber label="Reps" value={set.reps} testId={`input-set-reps-${exercise.id}-${set.id}`} onChange={(value) => updateSet(exercise.id, set.id, { reps: value })} /></div></div>)}</div></div><p className="mt-2 text-right font-mono text-[11px] text-muted-foreground">{formatNumber(getExerciseVolume(currentSets))} {state.settings.units} volume</p></div>; })}</div>
           {!exercises.length && <button type="button" onClick={addExercise} data-testid="button-empty-add-exercise" className="flex min-h-24 w-full flex-col items-center justify-center rounded-2xl border border-dashed border-border text-muted-foreground hover:border-[hsl(var(--secondary))]"><Plus size={20} /><span className="mt-1 text-xs font-bold">Add your first exercise</span></button>}
         </div>}
         {kind === 'cardio' && <div className="mt-6 rounded-2xl bg-[hsl(var(--accent)/.3)] p-4"><div className="flex gap-3"><Bike size={19} className="mt-0.5" /><div><p className="text-sm font-bold">Cardio can be tiny.</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Use notes for the route, duration, pace, or how it felt. There is no minimum worth celebrating.</p></div></div></div>}

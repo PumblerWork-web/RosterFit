@@ -17,6 +17,13 @@ export type RosterDay = {
   order: number;
 };
 
+export type ExerciseSet = {
+  id: string;
+  weight: number;
+  reps: number;
+  durationMinutes?: number;
+};
+
 export type ExerciseEntry = {
   id: string;
   name: string;
@@ -24,6 +31,7 @@ export type ExerciseEntry = {
   durationMinutes?: number;
   reps: number;
   sets: number;
+  setDetails?: ExerciseSet[];
   notes: string;
   date: string;
   volume: number;
