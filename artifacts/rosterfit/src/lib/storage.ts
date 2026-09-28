@@ -7,6 +7,7 @@ export type Settings = {
   theme: Theme;
   dayRolloverHour: number;
   units: UnitSystem;
+  customRestSeconds: number;
 };
 
 export type RosterDay = {
@@ -112,7 +113,7 @@ const sampleState = (): AppState => {
     { id: uid('activity'), date: dates[9], loggedAt: new Date(Date.now() - 777600000).toISOString(), kind: 'workout', notes: 'Full body primer.', isNightShift: false, exercises: [sampleExercise('Overhead press', 42.5, 5, 4, dates[9])] },
   ];
   return {
-    settings: { theme: 'light', dayRolloverHour: rollover, units: 'kg' },
+    settings: { theme: 'light', dayRolloverHour: rollover, units: 'kg', customRestSeconds: 75 },
     roster: sampleRoster,
     activities,
     achievements: [
