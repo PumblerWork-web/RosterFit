@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rosterfit-shell-v1';
+const CACHE_NAME = 'rosterfit-shell-v2';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/favicon.svg', '/icon-192.svg', '/icon-512.svg'];
 
 self.addEventListener('install', (event) => {

@@ -151,6 +151,22 @@ const sampleState = (): AppState => {
 
 export const getSampleState = sampleState;
 
+export const getCleanState = (): AppState => ({
+  settings: { theme: 'light', dayRolloverHour: 4, units: 'kg', customRestSeconds: 75 },
+  roster: sampleRoster,
+  activities: [],
+  achievements: [
+    { id: 'first-log', title: 'First shift logged', description: 'Log your first activity.', threshold: 1, progress: 0 },
+    { id: 'steady-7', title: 'Seven on the board', description: 'Keep seven logical days moving.', threshold: 7, progress: 0 },
+    { id: 'volume-10k', title: 'Ten thousand club', description: 'Move 10,000 kg of total volume.', threshold: 10000, progress: 0 },
+    { id: 'night-owl', title: 'Night owl', description: 'Train after three night shifts.', threshold: 3, progress: 0 },
+    { id: 'rest-smart', title: 'Rest is training', description: 'Log three planned rest days.', threshold: 3, progress: 0 },
+    { id: 'pb-chaser', title: 'PB chaser', description: 'Set a new personal best.', threshold: 1, progress: 0 },
+  ],
+  dailySteps: {},
+  dailyWater: {},
+});
+
 const openDb = (): Promise<IDBDatabase> => new Promise((resolve, reject) => {
   const request = indexedDB.open(DB_NAME, 1);
   request.onupgradeneeded = () => request.result.createObjectStore(STORE_NAME);
@@ -159,7 +175,7 @@ const openDb = (): Promise<IDBDatabase> => new Promise((resolve, reject) => {
 });
 
 export const loadState = async (): Promise<AppState> => {
-  if (!('indexedDB' in window)) return getSampleState();
+  if (!('indexedDB' in window)) return getCleanState();
   try {
     const db = await openDb();
     const value = await new Promise<AppState | undefined>((resolve, reject) => {
@@ -168,9 +184,9 @@ export const loadState = async (): Promise<AppState> => {
       request.onerror = () => reject(request.error);
     });
     db.close();
-    return value ? { ...value, dailySteps: value.dailySteps ?? {}, dailyWater: value.dailyWater ?? {} } : getSampleState();
+    return value ? { ...value, dailySteps: value.dailySteps ?? {}, dailyWater: value.dailyWater ?? {} } : getCleanState();
   } catch {
-    return getSampleState();
+    return getCleanState();
   }
 };
 
