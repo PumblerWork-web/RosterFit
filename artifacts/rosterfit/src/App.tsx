@@ -616,12 +616,41 @@ function AchievementsPage() {
 function SettingsPage() {
   const { state, update, reset } = useApp();
   const [importMessage, setImportMessage] = useState('');
+  const [rosterImportMessage, setRosterImportMessage] = useState('');
   const exportData = () => { const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `rosterfit-backup-${todayKey(state)}.json`; anchor.click(); URL.revokeObjectURL(url); };
   const importData = (event: ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { const incoming = JSON.parse(String(reader.result)) as AppState; if (!incoming.settings || !incoming.activities || !incoming.roster) throw new Error('Invalid'); update({ ...incoming, dailySteps: incoming.dailySteps ?? {} }); setImportMessage('Backup imported.'); } catch { setImportMessage('That file could not be read.'); } }; reader.readAsText(file); };
+  const exportRoster = () => {
+    const backup = { type: 'rosterfit-roster', version: 1, roster: state.roster, rosterAnchorDate: state.rosterAnchorDate, rosterAnchorDayId: state.rosterAnchorDayId };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `rosterfit-roster-${todayKey(state)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+  const importRoster = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const incoming = JSON.parse(String(reader.result)) as Record<string, unknown>;
+        if (incoming.type !== 'rosterfit-roster' || incoming.version !== 1 || !isRosterDayList(incoming.roster)) throw new Error('Invalid roster backup');
+        const anchorDayId = typeof incoming.rosterAnchorDayId === 'string' && incoming.roster.some((day) => day.id === incoming.rosterAnchorDayId) ? incoming.rosterAnchorDayId : undefined;
+        const anchorDate = anchorDayId && typeof incoming.rosterAnchorDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(incoming.rosterAnchorDate) ? incoming.rosterAnchorDate : undefined;
+        update({ roster: incoming.roster, rosterAnchorDate: anchorDate, rosterAnchorDayId: anchorDate ? anchorDayId : undefined });
+        setRosterImportMessage('Roster imported. Activity history was left unchanged.');
+      } catch {
+        setRosterImportMessage('That file is not a valid roster backup.');
+      }
+    };
+    reader.readAsText(file);
+  };
   const patchSettings = (patch: Partial<AppState['settings']>) => update({ settings: { ...state.settings, ...patch } });
   return <div className="mx-auto max-w-[1000px] px-5 pb-10 sm:px-8 lg:px-10"><PageIntro eyebrow="Make it yours" title="Settings" description="Everything lives on this device. Tune the edges, then keep moving." />
      <div className="space-y-5"><section className="card p-5 sm:p-6"><div className="mb-5 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"><SettingsIcon size={18} /></span><div><h3 className="font-display text-xl font-bold">Preferences</h3><p className="text-xs text-muted-foreground">Small details, less friction.</p></div></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Field label="Day rollover"><select data-testid="select-rollover" value={state.settings.dayRolloverHour} onChange={(e) => patchSettings({ dayRolloverHour: Number(e.target.value) })}>{[0, 1, 2, 3, 4, 5, 6, 7, 8].map((hour) => <option key={hour} value={hour}>{hour === 0 ? 'Midnight' : `${String(hour).padStart(2, '0')}:00`}</option>)}</select></Field><Field label="Units"><select data-testid="select-units" value={state.settings.units} onChange={(e) => patchSettings({ units: e.target.value as UnitSystem })}><option value="kg">Kilograms (kg)</option><option value="lb">Pounds (lb)</option></select></Field><Field label="Theme"><select data-testid="select-theme" value={state.settings.theme} onChange={(e) => patchSettings({ theme: e.target.value as Theme })}><option value="light">Light</option><option value="dark">Dark</option></select></Field></div></section>
-      <section className="card p-5 sm:p-6"><div className="mb-5 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]"><Download size={18} /></span><div><h3 className="font-display text-xl font-bold">Your data</h3><p className="text-xs text-muted-foreground">Portable, private, and yours.</p></div></div><div className="grid gap-3 sm:grid-cols-2"><button onClick={exportData} data-testid="button-export-data" className="pressable flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-border text-sm font-bold"><Download size={16} />Export JSON backup</button><label className="pressable flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[hsl(var(--primary))] text-sm font-bold text-[hsl(var(--primary-foreground))]"><Upload size={16} />Import JSON backup<input data-testid="input-import-data" type="file" accept="application/json,.json" className="hidden" onChange={importData} /></label></div>{importMessage && <p className="mt-3 text-xs font-bold text-[hsl(var(--secondary))]">{importMessage}</p>}<p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck size={14} />No account, no server, no mystery sync.</p></section>
+      <section className="card p-5 sm:p-6"><div className="mb-5 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]"><Download size={18} /></span><div><h3 className="font-display text-xl font-bold">Your data</h3><p className="text-xs text-muted-foreground">Portable, private, and yours.</p></div></div><p className="mb-2 text-xs font-bold text-muted-foreground">Everything, including activity history</p><div className="grid gap-3 sm:grid-cols-2"><button onClick={exportData} data-testid="button-export-data" className="pressable flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-border text-sm font-bold"><Download size={16} />Export all data</button><label className="pressable flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[hsl(var(--primary))] text-sm font-bold text-[hsl(var(--primary-foreground))]"><Upload size={16} />Import all data<input data-testid="input-import-data" type="file" accept="application/json,.json" className="hidden" onChange={importData} /></label></div>{importMessage && <p className="mt-3 text-xs font-bold text-[hsl(var(--secondary))]">{importMessage}</p>}<div className="mt-5 border-t border-border pt-4"><p className="mb-1 text-xs font-bold">Roster only</p><p className="mb-3 text-xs text-muted-foreground">Move your roster and presets without changing activity history.</p><div className="grid gap-3 sm:grid-cols-2"><button onClick={exportRoster} data-testid="button-export-roster" className="pressable flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-border text-sm font-bold"><Download size={16} />Export roster</button><label className="pressable flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-border text-sm font-bold"><Upload size={16} />Import roster<input data-testid="input-import-roster" type="file" accept="application/json,.json" className="hidden" onChange={importRoster} /></label></div>{rosterImportMessage && <p className="mt-3 text-xs font-bold text-[hsl(var(--secondary))]">{rosterImportMessage}</p>}</div><p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck size={14} />No account, no server, no mystery sync.</p></section>
       <section className="card border-destructive/30 p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-center"><div><h3 className="font-display text-xl font-bold">Reset local data</h3><p className="mt-1 text-sm text-muted-foreground">Clear activities and daily tracking, and restore default settings and roster. This cannot be undone.</p></div><button onClick={() => { if (window.confirm('This cannot be undone. If you want to keep your data, export it as a JSON file before resetting. Clear all local data and restore defaults?')) reset(); }} data-testid="button-reset-sample-data" className="pressable flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-destructive/30 px-4 text-sm font-bold text-destructive"><RotateCcw size={16} />Reset local data</button></div></section>
     </div>
   </div>;
@@ -660,6 +689,32 @@ function cardioComparisonFor(minutes: number) {
 }
 function formatCardioTime(minutes: number) { return minutes < 60 ? `${formatNumber(minutes)} min` : `${formatNumber(minutes / 60)} hr`; }
 function formatNumber(value: number) { return new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(Math.round(value * 10) / 10); }
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null; }
+function isPlannedExerciseList(value: unknown): value is PlannedExercise[] {
+  return Array.isArray(value) && value.every((exercise) => isRecord(exercise)
+    && typeof exercise.id === 'string'
+    && typeof exercise.name === 'string'
+    && Number.isFinite(exercise.sets)
+    && Number.isFinite(exercise.weight)
+    && Number.isFinite(exercise.reps));
+}
+function isPlannedCardioList(value: unknown): value is PlannedCardio[] {
+  return Array.isArray(value) && value.every((cardio) => isRecord(cardio)
+    && typeof cardio.id === 'string'
+    && typeof cardio.name === 'string'
+    && Number.isFinite(cardio.durationMinutes));
+}
+function isRosterDayList(value: unknown): value is RosterDay[] {
+  const activityKinds: RosterActivityKind[] = ['workout', 'cardio', 'rest', 'mixed'];
+  return Array.isArray(value) && value.every((day) => isRecord(day)
+    && typeof day.id === 'string'
+    && typeof day.label === 'string'
+    && ['day', 'night', 'off'].includes(String(day.kind))
+    && Number.isFinite(day.order)
+    && (day.activityKind === undefined || activityKinds.includes(day.activityKind as RosterActivityKind))
+    && (day.plannedExercises === undefined || isPlannedExerciseList(day.plannedExercises))
+    && (day.plannedCardio === undefined || isPlannedCardioList(day.plannedCardio)));
+}
 function daysSinceEpoch(dateKey: string) { return Math.floor(new Date(`${dateKey}T12:00:00`).getTime() / 86400000); }
 function getStreak(activities: Activity[], today: string) { const days = new Set(activities.map((item) => item.date)); let count = 0; let cursor = today; while (days.has(cursor)) { count += 1; cursor = shiftDate(cursor, -1); } return count; }
 function getLongestStreak(activities: Activity[]) { const days = [...new Set(activities.map((item) => item.date))].sort(); let best = 0; let current = 0; days.forEach((day, index) => { current = index && shiftDate(days[index - 1], 1) === day ? current + 1 : 1; best = Math.max(best, current); }); return best; }
