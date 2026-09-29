@@ -69,6 +69,8 @@ export type Achievement = {
 export type AppState = {
   settings: Settings;
   roster: RosterDay[];
+  rosterAnchorDate?: string;
+  rosterAnchorDayId?: string;
   activities: Activity[];
   achievements: Achievement[];
   dailySteps: Record<string, number>;

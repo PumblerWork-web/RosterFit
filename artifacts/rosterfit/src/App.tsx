@@ -39,12 +39,15 @@ const getExerciseSets = (exercise: ExerciseEntry): ExerciseSet[] => exercise.set
   }));
 const getSetVolume = (set: ExerciseSet) => set.weight * set.reps;
 const getExerciseVolume = (sets: ExerciseSet[]) => sets.reduce((total, set) => total + getSetVolume(set), 0);
-const rosterDayForDate = (roster: RosterDay[], date: string) => {
-  if (!roster.length) return undefined;
-  const index = ((daysSinceEpoch(date) % roster.length) + roster.length) % roster.length;
-  return roster[index];
+const rosterIndexForDate = (state: Pick<AppState, 'roster' | 'rosterAnchorDate' | 'rosterAnchorDayId'>, date: string) => {
+  if (!state.roster.length) return 0;
+  const anchorIndex = state.rosterAnchorDayId ? state.roster.findIndex((day) => day.id === state.rosterAnchorDayId) : -1;
+  const hasAnchor = anchorIndex >= 0 && Boolean(state.rosterAnchorDate);
+  const dayOffset = hasAnchor ? daysSinceEpoch(date) - daysSinceEpoch(state.rosterAnchorDate!) : daysSinceEpoch(date);
+  const startIndex = hasAnchor ? anchorIndex : 0;
+  return ((startIndex + dayOffset) % state.roster.length + state.roster.length) % state.roster.length;
 };
-const plannedExercisesForDate = (roster: RosterDay[], date: string) => rosterDayForDate(roster, date)?.plannedExercises ?? [];
+const plannedExercisesForDate = (state: Pick<AppState, 'roster' | 'rosterAnchorDate' | 'rosterAnchorDayId'>, date: string) => state.roster[rosterIndexForDate(state, date)]?.plannedExercises ?? [];
 const exerciseFromPlan = (planned: PlannedExercise, date: string): ExerciseEntry => ({
   id: makeId('exercise'),
   name: planned.name,
@@ -213,7 +216,7 @@ function DashboardPage() {
   const selectedVolume = volumeForRange(state.activities, today, volumeRange);
   const steps = state.dailySteps?.[today] ?? 0;
   const water = state.dailyWater?.[today] ?? 0;
-  const rosterIndex = state.roster.length ? Math.floor((daysSinceEpoch(today) % state.roster.length + state.roster.length) % state.roster.length) : 0;
+  const rosterIndex = rosterIndexForDate(state, today);
   const rosterDay = state.roster[rosterIndex];
   const workouts = state.activities.filter((item) => item.kind === 'workout').length;
   const pb = getPersonalBest(state.activities);
@@ -337,8 +340,8 @@ function LogPage() {
   }, [location, setLocation]);
   useEffect(() => {
     if (editingId || kind !== 'workout') return;
-    setExercises(plannedExercisesForDate(state.roster, date).map((planned) => exerciseFromPlan(planned, date)));
-  }, [date, kind, state.roster, editingId]);
+    setExercises(plannedExercisesForDate(state, date).map((planned) => exerciseFromPlan(planned, date)));
+  }, [date, kind, state.roster, state.rosterAnchorDate, state.rosterAnchorDayId, editingId]);
   const resetForm = () => { setEditingId(null); setKind('workout'); setDate(todayKey(state)); setNotes(''); setBodyWeight(''); setNightShift(false); setExercises([]); setCardioTimers({}); };
   const addExercise = () => setExercises((items) => [...items, { id: makeId('exercise'), name: '', weight: 0, reps: 8, sets: 3, setDetails: Array.from({ length: 3 }, () => ({ id: makeId('set'), weight: 0, reps: 8 })), notes: '', date, volume: 0 }]);
   const updateExercise = (id: string, patch: Partial<ExerciseEntry>) => setExercises((items) => items.map((item) => item.id === id ? { ...item, ...patch, volume: item.setDetails?.length ? getExerciseVolume(item.setDetails) : Number(patch.weight ?? item.weight) * Number(patch.reps ?? item.reps) * Number(patch.sets ?? item.sets) } : item));
@@ -493,7 +496,7 @@ function LogPage() {
 function RosterPage() {
   const { state, update } = useApp();
   const today = todayKey(state);
-  const index = state.roster.length ? Math.abs(daysSinceEpoch(today)) % state.roster.length : 0;
+  const index = rosterIndexForDate(state, today);
   const [draft, setDraft] = useState<RosterDay[]>(state.roster);
   const [saved, setSaved] = useState(false);
   useEffect(() => setDraft(state.roster), [state.roster]);
@@ -509,7 +512,7 @@ function RosterPage() {
     <div className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]">
       <section className="card overflow-hidden">
         <div className="border-b border-border p-5 sm:p-6"><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Today · {formatDate(today, { month: 'long', day: 'numeric' })}</p><h3 className="mt-1 font-display text-2xl font-bold">{state.roster[index]?.label ?? 'Build your cycle'}</h3><p className="mt-1 text-sm text-muted-foreground">{state.roster[index] ? dayLabel(state.roster[index].kind) : 'Add a roster day to begin.'}</p></div>
-        <div className="p-5 sm:p-6"><p className="mb-3 text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Up next</p><div className="space-y-2">{Array.from({ length: Math.min(5, state.roster.length) }, (_, offset) => { const day = state.roster[(index + offset + 1) % state.roster.length]; return day ? <div key={day.id} className="flex items-center gap-3 rounded-2xl bg-muted/65 p-3"><span className={cx('grid h-9 w-9 place-items-center rounded-xl text-xs font-bold', day.kind === 'night' ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : day.kind === 'day' ? 'bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]' : 'bg-card text-muted-foreground')}>{offset + 1}</span><span className="flex-1"><strong className="block text-sm">{day.label}</strong><span className="text-xs text-muted-foreground">{dayLabel(day.kind)}{day.plannedExercises?.length ? ` · ${day.plannedExercises.length} planned` : ''}</span></span><ArrowRight size={15} className="text-muted-foreground" /></div> : null; })}</div></div>
+        <div className="p-5 sm:p-6"><label className="mb-5 block"><span className="mb-2 block text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Current shift</span><select data-testid="select-current-roster-shift" className="min-h-11 w-full rounded-xl border border-border bg-card px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[hsl(var(--secondary))]" value={state.roster[index]?.id ?? ''} disabled={!state.roster.length} onChange={(event) => update({ rosterAnchorDate: today, rosterAnchorDayId: event.target.value })}><option value="" disabled>Select a shift</option>{state.roster.map((day) => <option key={day.id} value={day.id}>{day.label} · {dayLabel(day.kind)}</option>)}</select><span className="mt-2 block text-xs text-muted-foreground">Choose where you are in the cycle. The roster advances from today.</span></label><p className="mb-3 text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Up next</p><div className="space-y-2">{Array.from({ length: Math.min(5, state.roster.length) }, (_, offset) => { const day = state.roster[(index + offset + 1) % state.roster.length]; return day ? <div key={day.id} className="flex items-center gap-3 rounded-2xl bg-muted/65 p-3"><span className={cx('grid h-9 w-9 place-items-center rounded-xl text-xs font-bold', day.kind === 'night' ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : day.kind === 'day' ? 'bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]' : 'bg-card text-muted-foreground')}>{offset + 1}</span><span className="flex-1"><strong className="block text-sm">{day.label}</strong><span className="text-xs text-muted-foreground">{dayLabel(day.kind)}{day.plannedExercises?.length ? ` · ${day.plannedExercises.length} planned` : ''}</span></span><ArrowRight size={15} className="text-muted-foreground" /></div> : null; })}</div></div>
       </section>
       <section className="card p-5 sm:p-6">
         <div className="mb-5 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Cycle editor</p><h3 className="mt-1 font-display text-2xl font-bold">Shape your rotation</h3></div><button onClick={addDay} data-testid="button-add-roster-day" className="pressable flex min-h-10 items-center gap-2 rounded-xl border border-border px-3 text-xs font-bold"><Plus size={15} />Add day</button></div>
