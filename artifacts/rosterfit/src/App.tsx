@@ -563,6 +563,12 @@ function InsightsPage() {
     return { date, steps: state.dailySteps?.[date] ?? 0, water: state.dailyWater?.[date] ?? 0 };
   });
   const volume = totalVolume(state.activities);
+  const cardioMinutes = state.activities
+    .filter((activity) => activity.kind === 'cardio')
+    .flatMap((activity) => activity.exercises)
+    .reduce((total, exercise) => total + Math.max(0, Number(exercise.durationMinutes) || 0), 0);
+  const volumeComparison = comparisonFor(volume);
+  const cardioComparison = cardioComparisonFor(cardioMinutes);
   const pb = getPersonalBest(state.activities);
   const maxVolume = Math.max(...workoutData.map((item) => item.value), 1);
   const maxSteps = Math.max(...stepHistory.map((item) => item.steps), 1);
@@ -580,7 +586,8 @@ function InsightsPage() {
         </div>; });
       })()}</div></div><div className="mt-5 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-[hsl(var(--secondary))]" style={{ width: `${Math.min(100, (volume / 12000) * 100)}%` }} /></div></ChartCard>
       <ChartCard title="Personal-best progress" subtitle="Your strongest recorded exercise volumes" icon={<Trophy size={19} />}><div className="space-y-4"><PBBar label={pb.name} value={pb.value} max={Math.max(pb.value, 1200)} color="teal" /><PBBar label="Total cycle volume" value={volume} max={Math.max(volume, 12000)} color="lime" /><div className="rounded-2xl bg-muted/70 p-3 text-xs leading-relaxed text-muted-foreground"><strong className="text-foreground">New Personal Best!</strong> Your {pb.name.toLowerCase()} volume is the high mark in this local log.</div></div></ChartCard></div>
-    <section className="card mt-5 overflow-hidden"><div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Fun volume comparison</p><h3 className="mt-1 font-display text-2xl font-bold">{comparisonFor(volume).name}</h3><p className="mt-1 text-sm text-muted-foreground">You moved about {formatNumber(volume)} kg. That is a lot of {comparisonFor(volume).name.toLowerCase()} energy.</p></div><div className="rounded-2xl bg-[hsl(var(--accent))] px-4 py-3 text-center"><p className="font-display text-2xl font-bold text-[hsl(var(--accent-foreground))]">{comparisonFor(volume).next}</p><p className="text-[10px] font-bold uppercase tracking-widest text-[hsl(var(--accent-foreground)/.7)]">next horizon</p></div></div><div className="grid gap-2 p-5 sm:grid-cols-9 sm:p-6">{comparisonNames.map((name, index) => <div key={name} className={cx('rounded-xl p-3 text-center', index <= comparisonFor(volume).index ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'bg-muted text-muted-foreground')}><p className="font-display text-xs font-bold">{name}</p><p className="mt-1 font-mono text-[9px]">{comparisonThresholds[index].toLocaleString()} kg</p></div>)}</div></section>
+    <section className="card mt-5 overflow-hidden"><div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Fun volume comparison</p><h3 className="mt-1 font-display text-2xl font-bold">{volumeComparison.name}</h3><p className="mt-1 text-sm text-muted-foreground">{volume > 0 ? `You moved about ${formatNumber(volume)} kg. That is a lot of ${volumeComparison.name.toLowerCase()} energy.` : `Your first goal is ${volumeComparison.next} at ${comparisonThresholds[0].toLocaleString()} kg.`}</p></div><div className="rounded-2xl bg-[hsl(var(--accent))] px-4 py-3 text-center"><p className="font-display text-2xl font-bold text-[hsl(var(--accent-foreground))]">{volumeComparison.next}</p><p className="text-[10px] font-bold uppercase tracking-widest text-[hsl(var(--accent-foreground)/.7)]">next horizon</p></div></div><div className="grid gap-2 p-5 sm:grid-cols-9 sm:p-6">{comparisonNames.map((name, index) => <div key={name} className={cx('rounded-xl p-3 text-center', index <= volumeComparison.index ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'bg-muted text-muted-foreground')}><p className="font-display text-xs font-bold">{name}</p><p className="mt-1 font-mono text-[9px]">{comparisonThresholds[index].toLocaleString()} kg</p></div>)}</div></section>
+    <section className="card mt-5 overflow-hidden"><div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Cardio time comparison</p><h3 className="mt-1 font-display text-2xl font-bold">{cardioComparison.name}</h3><p className="mt-1 text-sm text-muted-foreground">You’ve logged {formatCardioTime(cardioMinutes)} of cardio. {cardioMinutes > 0 ? `That’s ${cardioComparison.name.toLowerCase()} time.` : 'Your first time milestone is waiting.'}</p></div><div className="rounded-2xl bg-[hsl(var(--secondary))] px-4 py-3 text-center text-[hsl(var(--secondary-foreground))]"><p className="font-display text-2xl font-bold">{cardioComparison.next}</p><p className="text-[10px] font-bold uppercase tracking-widest opacity-70">next · {formatCardioTime(cardioComparison.nextThreshold)}</p></div></div><div className="grid gap-2 p-5 sm:grid-cols-4 lg:grid-cols-6">{cardioComparisonNames.map((name, index) => <div key={name} className={cx('rounded-xl p-3 text-center', cardioMinutes >= cardioComparisonThresholds[index] ? 'bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]' : 'bg-muted text-muted-foreground')}><p className="font-display text-xs font-bold">{name}</p><p className="mt-1 font-mono text-[9px]">{formatCardioTime(cardioComparisonThresholds[index])}</p></div>)}</div></section>
   </div>;
 }
 
@@ -625,13 +632,27 @@ function NotFoundPage() { return <div className="mx-auto max-w-xl px-5 py-20 tex
 
 const comparisonNames = ['Baby Unicorn', 'Unicorn', 'Angry Unicorn', 'Horse', 'Rhinoceros', 'T-Rex', 'Dragon', 'Giant', 'Godzilla', 'Titan', 'Mega Beast'];
 const comparisonThresholds = [250, 500, 1000, 2500, 5000, 10000, 20000, 40000, 80000, 160000, 320000];
+const cardioComparisonNames = ['Quick loop', 'Hour outside', 'Feature film', 'Half-day adventure', 'Full-day adventure', '24 hours moving', 'A workweek moving', '100 hours moving', '250 hours moving', '500 hours moving', '1,000 hours moving'];
+const cardioComparisonThresholds = [30, 60, 120, 240, 480, 1440, 2400, 6000, 15000, 30000, 60000];
 function comparisonFor(volume: number) {
-  let index = comparisonThresholds.findIndex((threshold) => volume < threshold);
-  if (index < 0) index = comparisonNames.length - 1;
-  const currentName = comparisonNames[index] ?? comparisonNames[0];
-  const nextName = comparisonNames[Math.min(index + 1, comparisonNames.length - 1)] ?? currentName;
-  return { index, name: currentName, next: nextName };
+  const index = comparisonThresholds.reduce((result, threshold, milestoneIndex) => volume >= threshold ? milestoneIndex : result, -1);
+  const nextIndex = Math.min(index + 1, comparisonNames.length - 1);
+  return {
+    index,
+    name: index >= 0 ? comparisonNames[index] : 'Fresh start',
+    next: comparisonNames[nextIndex],
+  };
 }
+function cardioComparisonFor(minutes: number) {
+  const completedIndex = cardioComparisonThresholds.reduce((result, threshold, index) => minutes >= threshold ? index : result, -1);
+  const nextIndex = Math.min(completedIndex + 1, cardioComparisonNames.length - 1);
+  return {
+    name: completedIndex >= 0 ? cardioComparisonNames[completedIndex] : 'First lap awaits',
+    next: cardioComparisonNames[nextIndex],
+    nextThreshold: cardioComparisonThresholds[nextIndex],
+  };
+}
+function formatCardioTime(minutes: number) { return minutes < 60 ? `${formatNumber(minutes)} min` : `${formatNumber(minutes / 60)} hr`; }
 function formatNumber(value: number) { return new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(Math.round(value * 10) / 10); }
 function daysSinceEpoch(dateKey: string) { return Math.floor(new Date(`${dateKey}T12:00:00`).getTime() / 86400000); }
 function getStreak(activities: Activity[], today: string) { const days = new Set(activities.map((item) => item.date)); let count = 0; let cursor = today; while (days.has(cursor)) { count += 1; cursor = shiftDate(cursor, -1); } return count; }
