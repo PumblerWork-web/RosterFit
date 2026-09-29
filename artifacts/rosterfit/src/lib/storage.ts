@@ -71,6 +71,7 @@ export type AppState = {
   roster: RosterDay[];
   activities: Activity[];
   achievements: Achievement[];
+  dailySteps: Record<string, number>;
 };
 
 const DB_NAME = 'rosterfit-local';
@@ -134,6 +135,7 @@ const sampleState = (): AppState => {
     settings: { theme: 'light', dayRolloverHour: rollover, units: 'kg', customRestSeconds: 75 },
     roster: sampleRoster,
     activities,
+    dailySteps: { [today]: 6420, [dates[1]]: 8130, [dates[2]]: 5390, [dates[3]]: 9740 },
     achievements: [
       { id: 'first-log', title: 'First shift logged', description: 'Log your first activity.', threshold: 1, progress: activities.length },
       { id: 'steady-7', title: 'Seven on the board', description: 'Keep seven logical days moving.', threshold: 7, progress: 7 },
@@ -164,7 +166,7 @@ export const loadState = async (): Promise<AppState> => {
       request.onerror = () => reject(request.error);
     });
     db.close();
-    return value ?? getSampleState();
+    return value ? { ...value, dailySteps: value.dailySteps ?? {} } : getSampleState();
   } catch {
     return getSampleState();
   }

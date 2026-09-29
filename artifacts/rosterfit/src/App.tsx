@@ -73,6 +73,20 @@ const getSpeechRecognition = () => {
   const speechWindow = window as Window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor };
   return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
 };
+type VolumeRange = 'today' | 'week' | 'month' | 'all';
+const volumeRangeOptions: Array<{ value: VolumeRange; label: string }> = [
+  { value: 'today', label: 'Today' },
+  { value: 'week', label: 'This week' },
+  { value: 'month', label: 'This month' },
+  { value: 'all', label: 'All time' },
+];
+const volumeForRange = (activities: Activity[], today: string, range: VolumeRange) => {
+  if (range === 'all') return totalVolume(activities);
+  const start = range === 'today' ? today : range === 'month'
+    ? `${today.slice(0, 8)}01`
+    : shiftDate(today, -(new Date(`${today}T12:00:00`).getDay() === 0 ? 6 : new Date(`${today}T12:00:00`).getDay() - 1));
+  return totalVolume(activities.filter((activity) => activity.date >= start && activity.date <= today));
+};
 const parseSpokenSet = (transcript: string) => {
   const text = transcript.toLowerCase().replace(/,/g, '.');
   const numbers = [...text.matchAll(/\d+(?:\.\d+)?/g)].map((match) => Number(match[0]));
@@ -189,17 +203,21 @@ function PageIntro({ eyebrow, title, description, action }: { eyebrow: string; t
 }
 
 function DashboardPage() {
-  const { state } = useApp();
+  const { state, update } = useApp();
   const today = todayKey(state);
+  const [volumeRange, setVolumeRange] = useState<VolumeRange>('all');
   const activities = [...state.activities].sort((a, b) => b.loggedAt.localeCompare(a.loggedAt));
   const uniqueDays = new Set(state.activities.map((item) => item.date));
   const currentStreak = getStreak(state.activities, today);
   const longest = getLongestStreak(state.activities);
   const volume = totalVolume(state.activities);
+  const selectedVolume = volumeForRange(state.activities, today, volumeRange);
+  const steps = state.dailySteps?.[today] ?? 0;
   const rosterIndex = state.roster.length ? Math.floor((daysSinceEpoch(today) % state.roster.length + state.roster.length) % state.roster.length) : 0;
   const rosterDay = state.roster[rosterIndex];
   const workouts = state.activities.filter((item) => item.kind === 'workout').length;
   const pb = getPersonalBest(state.activities);
+  const updateSteps = (value: number) => update({ dailySteps: { ...(state.dailySteps ?? {}), [today]: value } });
   return <div className="mx-auto max-w-[1320px] px-5 pb-10 sm:px-8 lg:px-10">
     <section className="stagger-in relative overflow-hidden rounded-[1.75rem] bg-[hsl(var(--primary))] p-6 text-[hsl(var(--primary-foreground))] shadow-[var(--shadow-lift)] sm:p-8">
       <div className="absolute -right-10 -top-20 h-64 w-64 rounded-full border-[28px] border-[hsl(var(--accent)/.12)]" /><div className="absolute -bottom-20 right-28 h-36 w-36 rounded-full bg-[hsl(var(--secondary)/.2)] blur-2xl" />
@@ -210,8 +228,9 @@ function DashboardPage() {
     <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatCard className="stagger-in stagger-1" label="Current streak" value={`${currentStreak} days`} detail={`Best: ${longest} days`} icon={<Flame size={19} />} accent="lime" />
       <StatCard className="stagger-in stagger-2" label="Logged days" value={`${uniqueDays.size}`} detail={`${workouts} strength sessions`} icon={<Check size={19} />} accent="teal" />
-      <StatCard className="stagger-in stagger-3" label="Total volume" value={`${formatNumber(volume)} kg`} detail="All recorded lifts" icon={<Weight size={19} />} accent="coral" />
+      <VolumeCard className="stagger-in stagger-3" value={selectedVolume} range={volumeRange} onRangeChange={setVolumeRange} />
       <StatCard className="stagger-in stagger-4" label="Longest streak" value={`${longest} days`} detail="Keep your own pace" icon={<Target size={19} />} accent="ink" />
+      <StepsCard className="stagger-in stagger-5" steps={steps} onChange={updateSteps} />
     </div>
     <div className="mt-5 grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
       <section className="card stagger-in p-5 sm:p-6"><div className="mb-5 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">For the next 60 seconds</p><h3 className="mt-1 font-display text-xl font-bold">Log the shape of today</h3></div><Gauge className="text-[hsl(var(--secondary))]" size={24} /></div>
@@ -237,6 +256,17 @@ function DashboardPage() {
 function StatCard({ label, value, detail, icon, accent, className }: { label: string; value: string; detail: string; icon: ReactNode; accent: string; className?: string }) {
   const colors: Record<string, string> = { lime: 'bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]', teal: 'bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]', coral: 'bg-[hsl(var(--destructive))] text-white', ink: 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' };
   return <div className={cx('card card-lift flex items-start gap-3 p-4', className)}><span className={cx('grid h-10 w-10 shrink-0 place-items-center rounded-xl', colors[accent])}>{icon}</span><div className="min-w-0"><p className="truncate text-xs font-semibold text-muted-foreground">{label}</p><p className="mt-0.5 font-display text-2xl font-bold">{value}</p><p className="truncate text-[11px] text-muted-foreground">{detail}</p></div></div>;
+}
+
+function VolumeCard({ value, range, onRangeChange, className }: { value: number; range: VolumeRange; onRangeChange: (range: VolumeRange) => void; className?: string }) {
+  return <div className={cx('card card-lift p-4', className)}>
+    <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[hsl(var(--destructive))] text-white"><Weight size={19} /></span><div className="min-w-0"><p className="truncate text-xs font-semibold text-muted-foreground">Total volume</p><p className="mt-0.5 font-display text-2xl font-bold">{formatNumber(value)} kg</p><p className="truncate text-[11px] text-muted-foreground">{volumeRangeOptions.find((option) => option.value === range)?.label} recorded lifts</p></div></div>
+    <div className="mt-3 grid grid-cols-4 gap-1 rounded-xl bg-muted p-1">{volumeRangeOptions.map((option) => <button type="button" key={option.value} onClick={() => onRangeChange(option.value)} data-testid={`button-volume-range-${option.value}`} className={cx('min-h-8 rounded-lg px-1 text-[10px] font-bold transition-colors', range === option.value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground')}>{option.value === 'today' ? 'Today' : option.value === 'week' ? 'Week' : option.value === 'month' ? 'Month' : 'All time'}</button>)}</div>
+  </div>;
+}
+
+function StepsCard({ steps, onChange, className }: { steps: number; onChange: (value: number) => void; className?: string }) {
+  return <div className={cx('card card-lift flex items-start gap-3 p-4', className)}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]"><ActivityIcon size={19} /></span><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-muted-foreground">Steps today</p><input data-testid="input-daily-steps" type="number" min="0" step="1" inputMode="numeric" value={steps} onChange={(event) => onChange(Math.max(0, Math.round(Number(event.target.value) || 0)))} className="mt-0.5 w-full bg-transparent font-display text-2xl font-bold outline-none" /><p className="truncate text-[11px] text-muted-foreground">Saved for this logical day</p></div></div>;
 }
 
 function QuickAction({ href, icon, title, note, color }: { href: string; icon: ReactNode; title: string; note: string; color: string }) {
@@ -510,7 +540,7 @@ function SettingsPage() {
   const { state, update, reset } = useApp();
   const [importMessage, setImportMessage] = useState('');
   const exportData = () => { const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `rosterfit-backup-${todayKey(state)}.json`; anchor.click(); URL.revokeObjectURL(url); };
-  const importData = (event: ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { const incoming = JSON.parse(String(reader.result)) as AppState; if (!incoming.settings || !incoming.activities || !incoming.roster) throw new Error('Invalid'); update(incoming); setImportMessage('Backup imported.'); } catch { setImportMessage('That file could not be read.'); } }; reader.readAsText(file); };
+  const importData = (event: ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { const incoming = JSON.parse(String(reader.result)) as AppState; if (!incoming.settings || !incoming.activities || !incoming.roster) throw new Error('Invalid'); update({ ...incoming, dailySteps: incoming.dailySteps ?? {} }); setImportMessage('Backup imported.'); } catch { setImportMessage('That file could not be read.'); } }; reader.readAsText(file); };
   const patchSettings = (patch: Partial<AppState['settings']>) => update({ settings: { ...state.settings, ...patch } });
   return <div className="mx-auto max-w-[1000px] px-5 pb-10 sm:px-8 lg:px-10"><PageIntro eyebrow="Make it yours" title="Settings" description="Everything lives on this device. Tune the edges, then keep moving." />
      <div className="space-y-5"><section className="card p-5 sm:p-6"><div className="mb-5 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"><SettingsIcon size={18} /></span><div><h3 className="font-display text-xl font-bold">Preferences</h3><p className="text-xs text-muted-foreground">Small details, less friction.</p></div></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Field label="Day rollover"><select data-testid="select-rollover" value={state.settings.dayRolloverHour} onChange={(e) => patchSettings({ dayRolloverHour: Number(e.target.value) })}><option value={0}>Midnight</option><option value={2}>02:00</option><option value={4}>04:00</option><option value={6}>06:00</option><option value={8}>08:00</option></select></Field><Field label="Units"><select data-testid="select-units" value={state.settings.units} onChange={(e) => patchSettings({ units: e.target.value as UnitSystem })}><option value="kg">Kilograms (kg)</option><option value="lb">Pounds (lb)</option></select></Field><Field label="Theme"><select data-testid="select-theme" value={state.settings.theme} onChange={(e) => patchSettings({ theme: e.target.value as Theme })}><option value="light">Light · dawn shift</option><option value="dark">Dark · night shift</option></select></Field><Field label="Custom rest (seconds)"><input data-testid="input-custom-rest" type="number" min="15" max="600" step="5" value={state.settings.customRestSeconds ?? 75} onChange={(e) => patchSettings({ customRestSeconds: Math.min(600, Math.max(15, Number(e.target.value) || 75)) })} /><span className="mt-1 block text-[11px] text-muted-foreground">Used by the Custom timer button.</span></Field></div></section>
