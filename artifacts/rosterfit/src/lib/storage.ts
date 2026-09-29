@@ -11,6 +11,12 @@ export type PlannedExercise = {
   reps: number;
 };
 
+export type PlannedCardio = {
+  id: string;
+  name: string;
+  durationMinutes: number;
+};
+
 export type Settings = {
   theme: Theme;
   dayRolloverHour: number;
@@ -23,7 +29,9 @@ export type RosterDay = {
   label: string;
   kind: RosterKind;
   order: number;
+  activityKind?: ActivityKind;
   plannedExercises?: PlannedExercise[];
+  plannedCardio?: PlannedCardio[];
 };
 
 export type ExerciseSet = {
