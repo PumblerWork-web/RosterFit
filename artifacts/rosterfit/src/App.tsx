@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, createContext, useContext, type ReactNode, type FormEvent, type ChangeEvent } from 'react';
 import { Link, Route, Switch, useLocation } from 'wouter';
 import {
-  Activity as ActivityIcon, ArrowRight, BarChart3, Bike, CalendarDays, Check, CircleHelp, Clock3, Dumbbell, Download, Flame, Gauge, HeartPulse, History,
+  Activity as ActivityIcon, ArrowRight, BarChart3, Bike, CalendarDays, Check, CircleHelp, Clock3, Dumbbell, Download, Flame, Gauge, HeartPulse, History, Mic,
   Home, Moon, MoreHorizontal, Pencil, Plus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Sparkles,
   Sun, Target, TimerReset, Trash2, Trophy, Upload, Weight, X, Zap,
 } from 'lucide-react';
-import { activityVolume, dayLabel, formatDate, getSampleState, loadState, makeId, saveState, shiftDate, toDateKey, totalVolume, type Activity, type ActivityKind, type AppState, type ExerciseEntry, type ExerciseSet, type RosterDay, type RosterKind, type Theme, type UnitSystem } from '@/lib/storage';
+import { activityVolume, dayLabel, formatDate, getSampleState, loadState, makeId, saveState, shiftDate, toDateKey, totalVolume, type Activity, type ActivityKind, type AppState, type ExerciseEntry, type ExerciseSet, type PlannedExercise, type RosterDay, type RosterKind, type Theme, type UnitSystem } from '@/lib/storage';
 
 type AppContextValue = { state: AppState; update: (next: Partial<AppState>) => void; reset: () => void };
 const AppData = createContext<AppContextValue | null>(null);
@@ -39,6 +39,49 @@ const getExerciseSets = (exercise: ExerciseEntry): ExerciseSet[] => exercise.set
   }));
 const getSetVolume = (set: ExerciseSet) => set.weight * set.reps;
 const getExerciseVolume = (sets: ExerciseSet[]) => sets.reduce((total, set) => total + getSetVolume(set), 0);
+const rosterDayForDate = (roster: RosterDay[], date: string) => {
+  if (!roster.length) return undefined;
+  const index = ((daysSinceEpoch(date) % roster.length) + roster.length) % roster.length;
+  return roster[index];
+};
+const plannedExercisesForDate = (roster: RosterDay[], date: string) => rosterDayForDate(roster, date)?.plannedExercises ?? [];
+const exerciseFromPlan = (planned: PlannedExercise, date: string): ExerciseEntry => ({
+  id: makeId('exercise'),
+  name: planned.name,
+  weight: planned.weight,
+  reps: planned.reps,
+  sets: planned.sets,
+  setDetails: Array.from({ length: Math.max(1, planned.sets) }, () => ({ id: makeId('set'), weight: planned.weight, reps: planned.reps })),
+  notes: '',
+  date,
+  volume: planned.weight * planned.reps * planned.sets,
+});
+type SpeechRecognitionResultLike = { [index: number]: { transcript: string } };
+type SpeechRecognitionEventLike = { results: { [index: number]: SpeechRecognitionResultLike } };
+type SpeechRecognitionLike = {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+const getSpeechRecognition = () => {
+  const speechWindow = window as Window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor };
+  return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+};
+const parseSpokenSet = (transcript: string) => {
+  const text = transcript.toLowerCase().replace(/,/g, '.');
+  const numbers = [...text.matchAll(/\d+(?:\.\d+)?/g)].map((match) => Number(match[0]));
+  const weightMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos|lb|lbs|pound|pounds)/);
+  const repsMatch = text.match(/(\d+)\s*(?:reps?|repetitions?)/);
+  const weight = weightMatch ? Number(weightMatch[1]) : numbers[0];
+  const reps = repsMatch ? Number(repsMatch[1]) : numbers[1];
+  return { weight, reps };
+};
 
 function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -220,14 +263,25 @@ function LogPage() {
   const [restSeconds, setRestSeconds] = useState(0);
   const [timerChoice, setTimerChoice] = useState(60);
   const [savedNotice, setSavedNotice] = useState('');
+  const [voiceListeningFor, setVoiceListeningFor] = useState<string | null>(null);
+  const [voiceMessage, setVoiceMessage] = useState('');
   const timerRef = useRef<number | undefined>(undefined);
-  useEffect(() => () => { if (timerRef.current) window.clearInterval(timerRef.current); }, []);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const speechSupported = Boolean(getSpeechRecognition());
+  useEffect(() => () => {
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    recognitionRef.current?.stop();
+  }, []);
   useEffect(() => {
     if (!location.includes('?kind=')) return;
     const next = new URLSearchParams(window.location.search).get('kind') as ActivityKind | null;
     if (next && ['workout', 'cardio', 'rest'].includes(next)) setKind(next);
     setLocation('/log', { replace: true });
   }, [location, setLocation]);
+  useEffect(() => {
+    if (editingId || kind !== 'workout') return;
+    setExercises(plannedExercisesForDate(state.roster, date).map((planned) => exerciseFromPlan(planned, date)));
+  }, [date, kind, state.roster, editingId]);
   const resetForm = () => { setEditingId(null); setKind('workout'); setDate(todayKey(state)); setNotes(''); setBodyWeight(''); setNightShift(false); setExercises([]); };
   const addExercise = () => setExercises((items) => [...items, { id: makeId('exercise'), name: '', weight: 0, reps: 8, sets: 3, setDetails: Array.from({ length: 3 }, () => ({ id: makeId('set'), weight: 0, reps: 8 })), notes: '', date, volume: 0 }]);
   const updateExercise = (id: string, patch: Partial<ExerciseEntry>) => setExercises((items) => items.map((item) => item.id === id ? { ...item, ...patch, volume: item.setDetails?.length ? getExerciseVolume(item.setDetails) : Number(patch.weight ?? item.weight) * Number(patch.reps ?? item.reps) * Number(patch.sets ?? item.sets) } : item));
@@ -240,6 +294,57 @@ function LogPage() {
     const firstSet = nextSets[0];
     return { ...item, setDetails: nextSets, weight: firstSet?.weight ?? 0, reps: firstSet?.reps ?? 0, sets: nextSets.length, durationMinutes: firstSet?.durationMinutes, volume: getExerciseVolume(nextSets) };
   }));
+  const startVoiceCapture = (captureId: string, onTranscript: (transcript: string) => void) => {
+    const Recognition = getSpeechRecognition();
+    if (!Recognition) {
+      setVoiceMessage('Voice input is not available in this browser.');
+      return;
+    }
+    recognitionRef.current?.stop();
+    const recognition = new Recognition();
+    recognition.lang = 'en-AU';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim() ?? '';
+      if (transcript) onTranscript(transcript);
+    };
+    recognition.onerror = () => {
+      setVoiceListeningFor(null);
+      setVoiceMessage('I could not hear that. Try the mic again.');
+    };
+    recognition.onend = () => {
+      setVoiceListeningFor((current) => current === captureId ? null : current);
+      if (recognitionRef.current === recognition) recognitionRef.current = null;
+    };
+    recognitionRef.current = recognition;
+    setVoiceMessage('');
+    setVoiceListeningFor(captureId);
+    try {
+      recognition.start();
+    } catch {
+      setVoiceListeningFor(null);
+      setVoiceMessage('Voice input could not start. Try the mic again.');
+    }
+  };
+  const startVoiceForSet = (exerciseId: string, setId: string) => startVoiceCapture(`set-${exerciseId}-${setId}`, (transcript) => {
+    const { weight, reps } = parseSpokenSet(transcript);
+    if (!Number.isFinite(weight) && !Number.isFinite(reps)) {
+      setVoiceMessage('Say a weight and reps, for example “70 kilos for 5 reps.”');
+      return;
+    }
+    updateSet(exerciseId, setId, { ...(Number.isFinite(weight) ? { weight } : {}), ...(Number.isFinite(reps) ? { reps } : {}) });
+    setVoiceMessage(`Heard: ${transcript}`);
+  });
+  const startVoiceForCardio = (workoutId: string) => startVoiceCapture(`cardio-${workoutId}`, (transcript) => {
+    const duration = Number([...transcript.replace(/,/g, '.').matchAll(/\d+(?:\.\d+)?/g)][0]?.[0]);
+    if (!Number.isFinite(duration)) {
+      setVoiceMessage('Say the workout time, for example “20 minutes.”');
+      return;
+    }
+    updateCardioWorkout(workoutId, { durationMinutes: duration });
+    setVoiceMessage(`Heard: ${transcript}`);
+  });
   const addSet = (exerciseId: string) => setExercises((items) => items.map((item) => {
     if (item.id !== exerciseId) return item;
     const currentSets = getExerciseSets(item);
@@ -277,13 +382,14 @@ function LogPage() {
     <PageIntro eyebrow="Make it real" title={editingId ? 'Edit an activity' : 'Log the day'} description="A useful record beats a perfect plan. Capture the work, the walk, or the recovery." action={savedNotice ? <span className="flex items-center gap-2 rounded-full bg-[hsl(var(--secondary)/.16)] px-3 py-2 text-xs font-bold text-[hsl(var(--secondary))]"><Check size={15} />{savedNotice}</span> : null} />
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,.85fr)]">
       <form onSubmit={saveActivity} className="card p-5 sm:p-7">
-        <div className="mb-6 grid grid-cols-3 gap-2 rounded-2xl bg-muted p-1.5">
+         <div className="mb-6 grid grid-cols-3 gap-2 rounded-2xl bg-muted p-1.5">
           {(['workout', 'cardio', 'rest'] as ActivityKind[]).map((item) => { const Icon = iconForKind(item); return <button type="button" key={item} onClick={() => setKind(item)} data-testid={`button-kind-${item}`} className={cx('flex min-h-11 items-center justify-center gap-2 rounded-xl text-xs font-bold capitalize transition-all', kind === item ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground')}><Icon size={16} />{kindName[item]}</button>; })}
         </div>
+         {voiceMessage && <p className="mb-4 rounded-xl bg-[hsl(var(--secondary)/.1)] px-3 py-2 text-xs font-semibold text-[hsl(var(--secondary))]">{voiceMessage}</p>}
         <div className="grid gap-4 sm:grid-cols-2"><Field label="Logical activity date"><input data-testid="input-activity-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field><Field label="Body weight (optional)"><input data-testid="input-body-weight" type="number" step="0.1" placeholder={`e.g. 78.4 ${state.settings.units}`} value={bodyWeight} onChange={(e) => setBodyWeight(e.target.value)} /></Field></div>
         <div className="mt-4 flex items-center justify-between rounded-2xl bg-[hsl(var(--primary)/.05)] p-3"><div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"><Moon size={17} /></span><div><p className="text-sm font-bold">Night-shift session</p><p className="text-[11px] text-muted-foreground">Tag this if you trained around a shift</p></div></div><button type="button" onClick={() => setNightShift(!nightShift)} data-testid="button-toggle-night-shift" className={cx('h-7 w-12 rounded-full p-1 transition-colors', nightShift ? 'bg-[hsl(var(--secondary))]' : 'bg-muted')}><span className={cx('block h-5 w-5 rounded-full bg-card transition-transform', nightShift && 'translate-x-5')} /></button></div>
         {kind === 'workout' && <div className="mt-6"><div className="mb-3 flex items-center justify-between"><div><h3 className="font-display text-lg font-bold">Exercises</h3><p className="text-xs text-muted-foreground">Volume is weight × reps × sets.</p></div><button type="button" onClick={addExercise} data-testid="button-add-exercise" className="pressable flex min-h-10 items-center gap-2 rounded-xl bg-[hsl(var(--secondary))] px-3 text-xs font-bold text-[hsl(var(--secondary-foreground))]"><Plus size={15} />Add exercise</button></div>
-          <div className="space-y-3">{exercises.map((exercise, index) => { const previous = findPreviousExercise(state.activities, exercise.name, editingId); const previousSets = previous ? getExerciseSets(previous.exercise) : []; const previousResult = previous ? previousSets.map((set) => `${set.weight > 0 ? `${formatNumber(set.weight)} ${state.settings.units}` : 'bodyweight'} × ${set.reps}`).join(' · ') : ''; const currentSets = getExerciseSets(exercise); return <div key={exercise.id} className="rounded-2xl border border-border bg-muted/45 p-3"><div className="mb-3 flex items-center gap-2"><input data-testid={`input-exercise-name-${exercise.id}`} className="min-h-10 flex-1 bg-transparent px-1 font-bold outline-none placeholder:text-muted-foreground" placeholder={`Exercise ${index + 1}`} value={exercise.name} onChange={(e) => updateExercise(exercise.id, { name: e.target.value })} /><button type="button" onClick={() => setExercises((items) => items.filter((item) => item.id !== exercise.id))} data-testid={`button-remove-exercise-${exercise.id}`} className="grid h-9 w-9 place-items-center rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><X size={16} /></button></div>{previous && <p data-testid={`text-last-exercise-${exercise.id}`} className="mb-3 rounded-xl bg-[hsl(var(--secondary)/.1)] px-3 py-2 text-xs text-muted-foreground"><span className="font-bold text-[hsl(var(--secondary))]">Last time:</span> {previousResult} on {formatDate(previous.activity.date, { month: 'short', day: 'numeric' })}</p>}<div className="mt-4 rounded-2xl border border-border/70 bg-card/60 p-3"><div className="mb-3 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-muted-foreground">Sets</p><p className="text-[11px] text-muted-foreground">Each set keeps its own numbers.</p></div><button type="button" onClick={() => addSet(exercise.id)} data-testid={`button-add-set-${exercise.id}`} className="pressable flex min-h-9 items-center gap-1 rounded-xl border border-border px-3 text-xs font-bold"><Plus size={14} />Add set</button></div><div className="space-y-2">{currentSets.map((set, setIndex) => <div key={set.id} className="rounded-xl border border-border bg-muted/45 p-2"><div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Set {setIndex + 1}</span><button type="button" onClick={() => removeSet(exercise.id, set.id)} disabled={currentSets.length <= 1} data-testid={`button-remove-set-${exercise.id}-${set.id}`} className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground enabled:hover:bg-destructive/10 enabled:hover:text-destructive disabled:opacity-30"><Trash2 size={13} /></button></div><div className="grid grid-cols-2 gap-2"><MiniNumber label={`Weight (${state.settings.units})`} value={set.weight} testId={`input-set-weight-${exercise.id}-${set.id}`} onChange={(value) => updateSet(exercise.id, set.id, { weight: value })} /><MiniNumber label="Reps" value={set.reps} testId={`input-set-reps-${exercise.id}-${set.id}`} onChange={(value) => updateSet(exercise.id, set.id, { reps: value })} /></div></div>)}</div></div><p className="mt-2 text-right font-mono text-[11px] text-muted-foreground">{formatNumber(getExerciseVolume(currentSets))} {state.settings.units} volume</p></div>; })}</div>
+         <div className="space-y-3">{exercises.map((exercise, index) => { const previous = findPreviousExercise(state.activities, exercise.name, editingId); const previousSets = previous ? getExerciseSets(previous.exercise) : []; const previousResult = previous ? previousSets.map((set) => `${set.weight > 0 ? `${formatNumber(set.weight)} ${state.settings.units}` : 'bodyweight'} × ${set.reps}`).join(' · ') : ''; const currentSets = getExerciseSets(exercise); return <div key={exercise.id} className="rounded-2xl border border-border bg-muted/45 p-3"><div className="mb-3 flex items-center gap-2"><input data-testid={`input-exercise-name-${exercise.id}`} className="min-h-10 flex-1 bg-transparent px-1 font-bold outline-none placeholder:text-muted-foreground" placeholder={`Exercise ${index + 1}`} value={exercise.name} onChange={(e) => updateExercise(exercise.id, { name: e.target.value })} /><button type="button" onClick={() => setExercises((items) => items.filter((item) => item.id !== exercise.id))} data-testid={`button-remove-exercise-${exercise.id}`} className="grid h-9 w-9 place-items-center rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><X size={16} /></button></div>{previous && <p data-testid={`text-last-exercise-${exercise.id}`} className="mb-3 rounded-xl bg-[hsl(var(--secondary)/.1)] px-3 py-2 text-xs text-muted-foreground"><span className="font-bold text-[hsl(var(--secondary))]">Last time:</span> {previousResult} on {formatDate(previous.activity.date, { month: 'short', day: 'numeric' })}</p>}<div className="mt-4 rounded-2xl border border-border/70 bg-card/60 p-3"><div className="mb-3 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-muted-foreground">Sets</p><p className="text-[11px] text-muted-foreground">{speechSupported ? 'Use the mic to say a weight and reps.' : 'Each set keeps its own numbers.'}</p></div><button type="button" onClick={() => addSet(exercise.id)} data-testid={`button-add-set-${exercise.id}`} className="pressable flex min-h-9 items-center gap-1 rounded-xl border border-border px-3 text-xs font-bold"><Plus size={14} />Add set</button></div><div className="space-y-2">{currentSets.map((set, setIndex) => <div key={set.id} className="rounded-xl border border-border bg-muted/45 p-2"><div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Set {setIndex + 1}</span><div className="flex items-center gap-1"><button type="button" onClick={() => startVoiceForSet(exercise.id, set.id)} disabled={!speechSupported} data-testid={`button-voice-set-${exercise.id}-${set.id}`} aria-label={`Fill set ${setIndex + 1} by voice`} className={cx('grid h-7 w-7 place-items-center rounded-lg text-muted-foreground enabled:hover:bg-[hsl(var(--secondary)/.12)] enabled:hover:text-[hsl(var(--secondary))] disabled:opacity-30', voiceListeningFor === `set-${exercise.id}-${set.id}` && 'bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]')}><Mic size={13} /></button><button type="button" onClick={() => removeSet(exercise.id, set.id)} disabled={currentSets.length <= 1} data-testid={`button-remove-set-${exercise.id}-${set.id}`} className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground enabled:hover:bg-destructive/10 enabled:hover:text-destructive disabled:opacity-30"><Trash2 size={13} /></button></div></div><div className="grid grid-cols-2 gap-2"><MiniNumber label={`Weight (${state.settings.units})`} value={set.weight} testId={`input-set-weight-${exercise.id}-${set.id}`} onChange={(value) => updateSet(exercise.id, set.id, { weight: value })} /><MiniNumber label="Reps" value={set.reps} testId={`input-set-reps-${exercise.id}-${set.id}`} onChange={(value) => updateSet(exercise.id, set.id, { reps: value })} /></div></div>)}</div></div><p className="mt-2 text-right font-mono text-[11px] text-muted-foreground">{formatNumber(getExerciseVolume(currentSets))} {state.settings.units} volume</p></div>; })}</div>
           {!exercises.length && <button type="button" onClick={addExercise} data-testid="button-empty-add-exercise" className="flex min-h-24 w-full flex-col items-center justify-center rounded-2xl border border-dashed border-border text-muted-foreground hover:border-[hsl(var(--secondary))]"><Plus size={20} /><span className="mt-1 text-xs font-bold">Add your first exercise</span></button>}
         </div>}
          {kind === 'cardio' && <div className="mt-6 rounded-2xl border border-[hsl(var(--accent)/.45)] bg-[hsl(var(--accent)/.2)] p-4"><div className="mb-4 flex items-start justify-between gap-3"><div className="flex gap-3"><Bike size={19} className="mt-0.5 shrink-0" /><div><p className="text-sm font-bold">Cardio workouts</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Add each cardio workout and record how long it took.</p></div></div><button type="button" onClick={addCardioWorkout} data-testid="button-add-cardio-workout" className="pressable flex min-h-9 shrink-0 items-center gap-1 rounded-xl bg-[hsl(var(--secondary))] px-3 text-xs font-bold text-[hsl(var(--secondary-foreground))]"><Plus size={14} />Workout</button></div>{exercises.length > 0 && <div className="space-y-2">{exercises.map((workout, index) => <div key={workout.id} className="rounded-xl border border-border bg-card/75 p-3"><div className="mb-2 flex items-center gap-2"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[hsl(var(--accent))] text-xs font-bold text-[hsl(var(--accent-foreground))]">{index + 1}</span><input data-testid={`input-cardio-workout-${workout.id}`} className="min-h-10 min-w-0 flex-1 bg-transparent px-1 text-sm font-bold outline-none placeholder:text-muted-foreground" placeholder="Workout name (e.g. Run)" value={workout.name} onChange={(e) => updateCardioWorkout(workout.id, { name: e.target.value })} /><button type="button" onClick={() => removeCardioWorkout(workout.id)} data-testid={`button-remove-cardio-workout-${workout.id}`} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><X size={15} /></button></div><div className="max-w-[180px]"><MiniNumber label="Time (min)" value={workout.durationMinutes ?? 0} testId={`input-cardio-duration-${workout.id}`} onChange={(value) => updateCardioWorkout(workout.id, { durationMinutes: value })} /></div></div>)}</div>}</div>}
@@ -307,12 +413,30 @@ function RosterPage() {
   const [draft, setDraft] = useState<RosterDay[]>(state.roster);
   const [saved, setSaved] = useState(false);
   useEffect(() => setDraft(state.roster), [state.roster]);
-  const addDay = () => setDraft((items) => [...items, { id: makeId('roster'), label: `Day ${items.length + 1}`, kind: 'off', order: items.length }]);
+  const addDay = () => setDraft((items) => [...items, { id: makeId('roster'), label: `Day ${items.length + 1}`, kind: 'off', order: items.length, plannedExercises: [] }]);
   const patchDay = (id: string, patch: Partial<RosterDay>) => setDraft((items) => items.map((day) => day.id === id ? { ...day, ...patch } : day));
+  const addPlannedExercise = (dayId: string) => setDraft((items) => items.map((day) => day.id === dayId ? { ...day, plannedExercises: [...(day.plannedExercises ?? []), { id: makeId('planned'), name: '', sets: 3, weight: 0, reps: 8 }] } : day));
+  const patchPlannedExercise = (dayId: string, exerciseId: string, patch: Partial<PlannedExercise>) => setDraft((items) => items.map((day) => day.id === dayId ? { ...day, plannedExercises: (day.plannedExercises ?? []).map((exercise) => exercise.id === exerciseId ? { ...exercise, ...patch } : exercise) } : day));
+  const removePlannedExercise = (dayId: string, exerciseId: string) => setDraft((items) => items.map((day) => day.id === dayId ? { ...day, plannedExercises: (day.plannedExercises ?? []).filter((exercise) => exercise.id !== exerciseId) } : day));
   const saveRoster = () => { update({ roster: draft.map((item, i) => ({ ...item, order: i })) }); setSaved(true); window.setTimeout(() => setSaved(false), 2500); };
-  return <div className="mx-auto max-w-[1320px] px-5 pb-10 sm:px-8 lg:px-10"><PageIntro eyebrow="Your rhythm" title="Roster cycle" description="Make the rotation visible. RosterFit uses the cycle to show what kind of day you are in, without judging the pace." action={<button onClick={saveRoster} data-testid="button-save-roster" className="pressable flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))]"><Check size={16} />{saved ? 'Saved' : 'Save cycle'}</button>} />
-    <div className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><section className="card overflow-hidden"><div className="border-b border-border p-5 sm:p-6"><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Today · {formatDate(today, { month: 'long', day: 'numeric' })}</p><h3 className="mt-1 font-display text-2xl font-bold">{state.roster[index]?.label ?? 'Build your cycle'}</h3><p className="mt-1 text-sm text-muted-foreground">{state.roster[index] ? dayLabel(state.roster[index].kind) : 'Add a roster day to begin.'}</p></div><div className="p-5 sm:p-6"><p className="mb-3 text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Up next</p><div className="space-y-2">{Array.from({ length: Math.min(5, state.roster.length) }, (_, offset) => { const day = state.roster[(index + offset + 1) % state.roster.length]; return day ? <div key={day.id} className="flex items-center gap-3 rounded-2xl bg-muted/65 p-3"><span className={cx('grid h-9 w-9 place-items-center rounded-xl text-xs font-bold', day.kind === 'night' ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : day.kind === 'day' ? 'bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]' : 'bg-card text-muted-foreground')}>{offset + 1}</span><span className="flex-1"><strong className="block text-sm">{day.label}</strong><span className="text-xs text-muted-foreground">{dayLabel(day.kind)}</span></span><ArrowRight size={15} className="text-muted-foreground" /></div> : null; })}</div></div></section>
-      <section className="card p-5 sm:p-6"><div className="mb-5 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Cycle editor</p><h3 className="mt-1 font-display text-2xl font-bold">Shape your rotation</h3></div><button onClick={addDay} data-testid="button-add-roster-day" className="pressable flex min-h-10 items-center gap-2 rounded-xl border border-border px-3 text-xs font-bold"><Plus size={15} />Add day</button></div><div className="mb-4 rounded-2xl bg-[hsl(var(--accent)/.32)] p-3 text-xs leading-relaxed text-muted-foreground"><strong className="text-foreground">Default:</strong> 3 days · 3 nights · 6 off. Rename, retag, or add days to match the real rota.</div><div className="space-y-2">{draft.map((day, i) => <div key={day.id} className="flex items-center gap-2 rounded-2xl border border-border p-2"><span className="grid h-8 w-8 place-items-center text-xs font-mono text-muted-foreground">{String(i + 1).padStart(2, '0')}</span><input data-testid={`input-roster-label-${day.id}`} className="min-h-10 min-w-0 flex-1 rounded-xl bg-muted/50 px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[hsl(var(--secondary))]" value={day.label} onChange={(e) => patchDay(day.id, { label: e.target.value })} /><select data-testid={`select-roster-kind-${day.id}`} className="min-h-10 rounded-xl border-border bg-muted/50 px-2 text-xs font-bold outline-none" value={day.kind} onChange={(e) => patchDay(day.id, { kind: e.target.value as RosterKind })}><option value="day">Day</option><option value="night">Night</option><option value="off">Off</option></select><button onClick={() => setDraft((items) => items.filter((item) => item.id !== day.id))} data-testid={`button-delete-roster-${day.id}`} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 size={15} /></button></div>)}</div></section>
+  return <div className="mx-auto max-w-[1320px] px-5 pb-10 sm:px-8 lg:px-10">
+    <PageIntro eyebrow="Your rhythm" title="Roster cycle" description="Make the rotation visible. Add a preset workout to any roster day so your next Log starts ready to go." action={<button onClick={saveRoster} data-testid="button-save-roster" className="pressable flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))]"><Check size={16} />{saved ? 'Saved' : 'Save cycle'}</button>} />
+    <div className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]">
+      <section className="card overflow-hidden">
+        <div className="border-b border-border p-5 sm:p-6"><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Today · {formatDate(today, { month: 'long', day: 'numeric' })}</p><h3 className="mt-1 font-display text-2xl font-bold">{state.roster[index]?.label ?? 'Build your cycle'}</h3><p className="mt-1 text-sm text-muted-foreground">{state.roster[index] ? dayLabel(state.roster[index].kind) : 'Add a roster day to begin.'}</p></div>
+        <div className="p-5 sm:p-6"><p className="mb-3 text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Up next</p><div className="space-y-2">{Array.from({ length: Math.min(5, state.roster.length) }, (_, offset) => { const day = state.roster[(index + offset + 1) % state.roster.length]; return day ? <div key={day.id} className="flex items-center gap-3 rounded-2xl bg-muted/65 p-3"><span className={cx('grid h-9 w-9 place-items-center rounded-xl text-xs font-bold', day.kind === 'night' ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : day.kind === 'day' ? 'bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]' : 'bg-card text-muted-foreground')}>{offset + 1}</span><span className="flex-1"><strong className="block text-sm">{day.label}</strong><span className="text-xs text-muted-foreground">{dayLabel(day.kind)}{day.plannedExercises?.length ? ` · ${day.plannedExercises.length} planned` : ''}</span></span><ArrowRight size={15} className="text-muted-foreground" /></div> : null; })}</div></div>
+      </section>
+      <section className="card p-5 sm:p-6">
+        <div className="mb-5 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Cycle editor</p><h3 className="mt-1 font-display text-2xl font-bold">Shape your rotation</h3></div><button onClick={addDay} data-testid="button-add-roster-day" className="pressable flex min-h-10 items-center gap-2 rounded-xl border border-border px-3 text-xs font-bold"><Plus size={15} />Add day</button></div>
+        <div className="mb-4 rounded-2xl bg-[hsl(var(--accent)/.32)] p-3 text-xs leading-relaxed text-muted-foreground"><strong className="text-foreground">Preset workouts:</strong> Add the exercises, default weight, reps, and set count for each roster day. The Log page copies them into today’s session.</div>
+        <div className="space-y-3">{draft.map((day, i) => <div key={day.id} className="rounded-2xl border border-border p-3">
+          <div className="flex items-center gap-2"><span className="grid h-8 w-8 shrink-0 place-items-center text-xs font-mono text-muted-foreground">{String(i + 1).padStart(2, '0')}</span><input data-testid={`input-roster-label-${day.id}`} className="min-h-10 min-w-0 flex-1 rounded-xl bg-muted/50 px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[hsl(var(--secondary))]" value={day.label} onChange={(e) => patchDay(day.id, { label: e.target.value })} /><select data-testid={`select-roster-kind-${day.id}`} className="min-h-10 rounded-xl border-border bg-muted/50 px-2 text-xs font-bold outline-none" value={day.kind} onChange={(e) => patchDay(day.id, { kind: e.target.value as RosterKind })}><option value="day">Day</option><option value="night">Night</option><option value="off">Off</option></select><button onClick={() => setDraft((items) => items.filter((item) => item.id !== day.id))} data-testid={`button-delete-roster-${day.id}`} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 size={15} /></button></div>
+          <div className="mt-3 border-t border-border pt-3"><div className="mb-2 flex items-center justify-between"><div><p className="text-xs font-bold">Preset workout</p><p className="text-[11px] text-muted-foreground">Optional · used when this day is logged</p></div><button type="button" onClick={() => addPlannedExercise(day.id)} data-testid={`button-add-planned-exercise-${day.id}`} className="pressable flex min-h-8 items-center gap-1 rounded-lg border border-border px-2 text-[11px] font-bold"><Plus size={13} />Exercise</button></div>
+            <div className="space-y-2">{day.plannedExercises?.map((exercise) => <div key={exercise.id} className="grid grid-cols-2 gap-2 rounded-xl bg-muted/55 p-2 sm:grid-cols-[minmax(0,1.5fr)_repeat(3,minmax(0,.6fr))_auto]"><input data-testid={`input-planned-exercise-name-${exercise.id}`} className="col-span-2 min-h-9 min-w-0 rounded-lg bg-card px-2 text-xs font-bold outline-none sm:col-span-1" placeholder="Exercise name" value={exercise.name} onChange={(e) => patchPlannedExercise(day.id, exercise.id, { name: e.target.value })} /><MiniNumber label="Sets" value={exercise.sets} testId={`input-planned-exercise-sets-${exercise.id}`} onChange={(value) => patchPlannedExercise(day.id, exercise.id, { sets: Math.max(1, Math.round(value)) })} /><MiniNumber label={`Weight (${state.settings.units})`} value={exercise.weight} testId={`input-planned-exercise-weight-${exercise.id}`} onChange={(value) => patchPlannedExercise(day.id, exercise.id, { weight: value })} /><MiniNumber label="Reps" value={exercise.reps} testId={`input-planned-exercise-reps-${exercise.id}`} onChange={(value) => patchPlannedExercise(day.id, exercise.id, { reps: Math.max(0, Math.round(value)) })} /><button type="button" onClick={() => removePlannedExercise(day.id, exercise.id)} data-testid={`button-remove-planned-exercise-${exercise.id}`} className="grid h-9 w-9 place-items-center self-end rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 size={14} /></button></div>)}</div>
+            {!day.plannedExercises?.length && <p className="rounded-xl bg-muted/45 px-3 py-2 text-[11px] text-muted-foreground">No preset yet. Add an exercise to make this day ready to log.</p>}
+          </div>
+        </div>)}</div>
+      </section>
     </div>
   </div>;
 }

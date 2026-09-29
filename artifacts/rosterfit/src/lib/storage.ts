@@ -3,6 +3,14 @@ export type UnitSystem = 'kg' | 'lb';
 export type ActivityKind = 'workout' | 'cardio' | 'rest';
 export type RosterKind = 'day' | 'night' | 'off';
 
+export type PlannedExercise = {
+  id: string;
+  name: string;
+  sets: number;
+  weight: number;
+  reps: number;
+};
+
 export type Settings = {
   theme: Theme;
   dayRolloverHour: number;
@@ -15,6 +23,7 @@ export type RosterDay = {
   label: string;
   kind: RosterKind;
   order: number;
+  plannedExercises?: PlannedExercise[];
 };
 
 export type ExerciseSet = {
