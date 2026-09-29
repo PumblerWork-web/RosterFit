@@ -31,21 +31,21 @@
 }
 
 :root {
-  --background: 244 38% 96%;
-  --foreground: 237 34% 17%;
-  --border: 234 24% 88%;
-  --input: 234 24% 84%;
-  --ring: 170 64% 40%;
+  --background: 210 30% 97%;
+  --foreground: 214 24% 18%;
+  --border: 210 20% 85%;
+  --input: 210 18% 88%;
+  --ring: 199 52% 52%;
   --card: 0 0% 100%;
-  --card-foreground: 237 34% 17%;
-  --primary: 238 47% 24%;
-  --primary-foreground: 60 86% 85%;
-  --secondary: 170 64% 40%;
-  --secondary-foreground: 238 47% 14%;
-  --muted: 242 29% 92%;
-  --muted-foreground: 236 17% 46%;
-  --accent: 60 86% 72%;
-  --accent-foreground: 238 47% 17%;
+  --card-foreground: 214 24% 18%;
+  --primary: 207 28% 26%;
+  --primary-foreground: 204 82% 94%;
+  --secondary: 200 42% 46%;
+  --secondary-foreground: 210 24% 12%;
+  --muted: 210 24% 94%;
+  --muted-foreground: 214 18% 38%;
+  --accent: 194 82% 70%;
+  --accent-foreground: 210 24% 12%;
   --destructive: 7 82% 61%;
   --app-font-sans: 'Plus Jakarta Sans', sans-serif;
   --app-font-display: 'Space Grotesk', sans-serif;
@@ -56,24 +56,24 @@
 }
 
 .dark {
-  --background: 237 36% 10%;
-  --foreground: 244 38% 94%;
-  --border: 237 25% 23%;
-  --input: 237 25% 27%;
-  --ring: 170 64% 48%;
-  --card: 237 31% 15%;
-  --card-foreground: 244 38% 94%;
-  --primary: 220 14% 68%;
-  --primary-foreground: 237 36% 10%;
-  --secondary: 170 64% 48%;
-  --secondary-foreground: 237 36% 10%;
-  --muted: 237 25% 21%;
-  --muted-foreground: 237 15% 68%;
-  --accent: 7 82% 61%;
-  --accent-foreground: 0 0% 100%;
+  --background: 222 23% 9%;
+  --foreground: 210 20% 96%;
+  --border: 220 15% 18%;
+  --input: 220 15% 16%;
+  --ring: 198 82% 66%;
+  --card: 223 18% 12%;
+  --card-foreground: 210 20% 96%;
+  --primary: 220 15% 17%;
+  --primary-foreground: 210 22% 96%;
+  --secondary: 188 72% 55%;
+  --secondary-foreground: 210 20% 10%;
+  --muted: 220 12% 21%;
+  --muted-foreground: 214 12% 74%;
+  --accent: 44 92% 62%;
+  --accent-foreground: 220 18% 10%;
   --destructive: 7 82% 66%;
-  --shadow-soft: 0 16px 45px rgba(0, 0, 0, .18);
-  --shadow-lift: 0 20px 55px rgba(0, 0, 0, .28);
+  --shadow-soft: 0 16px 45px rgba(0, 0, 0, .22);
+  --shadow-lift: 0 20px 55px rgba(0, 0, 0, .32);
 }
 
 @layer base {
