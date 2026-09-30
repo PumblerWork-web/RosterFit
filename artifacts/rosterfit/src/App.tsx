@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, createContext, useContext, type ReactNode, type FormEvent, type ChangeEvent } from 'react';
 import { Link, Route, Switch, useLocation } from 'wouter';
 import {
-  Activity as ActivityIcon, ArrowRight, BarChart3, Bike, CalendarDays, Check, CircleHelp, Clock3, Droplets, Dumbbell, Download, Flame, Gauge, HeartPulse, History, Mic,
-  Home, Moon, MoreHorizontal, Pencil, Plus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Sparkles, Star,
+  Activity as ActivityIcon, ArrowRight, BarChart3, Bike, CalendarDays, Check, CircleHelp, Clock3, Droplets, Dumbbell, Download, Flame, History, Mic,
+  Frown, Home, Moon, MoreHorizontal, Pencil, Plus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Smile, Sparkles, Star,
   Sun, Target, TimerReset, Trash2, Trophy, Upload, Weight, X, Zap,
 } from 'lucide-react';
-import { activityVolume, dayLabel, formatDate, getCleanState, loadState, makeId, saveState, shiftDate, toDateKey, totalVolume, type Activity, type ActivityKind, type AppState, type ExerciseEntry, type ExerciseSet, type PlannedCardio, type PlannedExercise, type RosterActivityKind, type RosterDay, type RosterKind, type Theme, type UnitSystem } from '@/lib/storage';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { activityVolume, dayLabel, formatDate, getCleanState, loadState, makeId, saveState, shiftDate, toDateKey, totalVolume, type Activity, type ActivityKind, type AppState, type ExerciseEntry, type ExerciseSet, type PlannedCardio, type PlannedExercise, type RosterActivityKind, type RosterDay, type RosterKind, type Theme, type UnitSystem, type WorkoutMood } from '@/lib/storage';
 
 type AppContextValue = { state: AppState; update: (next: Partial<AppState>) => void; reset: () => void };
 const AppData = createContext<AppContextValue | null>(null);
@@ -250,19 +251,10 @@ function DashboardPage() {
       <StepsCard className="stagger-in stagger-5 lg:col-span-2" steps={steps} onChange={updateSteps} />
       <WaterCard className="stagger-in stagger-5 lg:col-span-2" amount={water} onChange={updateWater} />
     </div>
-    <div className="mt-5 grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
-      <section className="card stagger-in p-5 sm:p-6"><div className="mb-5 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">For the next 60 seconds</p><h3 className="mt-1 font-display text-xl font-bold">Log the shape of today</h3></div><Gauge className="text-[hsl(var(--secondary))]" size={24} /></div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <QuickAction href="/log?kind=workout" icon={<Dumbbell size={20} />} title="Strength" note="Log a lift" color="teal" />
-          <QuickAction href="/log?kind=cardio" icon={<HeartPulse size={20} />} title="Cardio" note="Clear the head" color="lime" />
-        </div>
-        <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl bg-muted/65 p-4"><div className="grid h-10 w-10 place-items-center rounded-xl bg-card text-[hsl(var(--secondary))]"><CalendarDays size={19} /></div><div className="mr-auto"><p className="text-xs text-muted-foreground">Today’s roster day</p><p className="font-bold">{rosterDay?.label ?? 'No roster set'} <span className="font-normal text-muted-foreground">· {rosterDay ? dayLabel(rosterDay.kind) : 'add a cycle'}</span></p></div><Link href="/roster" data-testid="link-view-roster" className="pressable flex items-center gap-1 text-xs font-bold text-[hsl(var(--secondary))]">View cycle <ArrowRight size={14} /></Link></div>
-      </section>
-      <section className="card stagger-in stagger-2 overflow-hidden"><div className="flex items-center justify-between border-b border-border px-5 py-4"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Recent activity</p><h3 className="mt-1 font-display text-xl font-bold">Your last moves</h3></div><History size={20} className="text-muted-foreground" /></div>
+    <section className="card mt-5 stagger-in overflow-hidden"><div className="flex items-center justify-between border-b border-border px-5 py-4"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Recent activity</p><h3 className="mt-1 font-display text-xl font-bold">Your last moves</h3></div><History size={20} className="text-muted-foreground" /></div>
         <div className="divide-y divide-border">{activities.slice(0, 5).map((activity) => <ActivityRow key={activity.id} activity={activity} />)}</div>
         {!activities.length && <EmptyState title="Your first move is waiting." detail="Log a workout, cardio session, or planned rest day." icon={<Zap />} />}
-      </section>
-    </div>
+    </section>
     <section className="mt-5 grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
       <div className="card flex items-center gap-4 p-5 sm:p-6"><div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]"><Trophy size={25} /></div><div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Personal best</p><h3 className="mt-1 font-display text-lg font-bold">{pb.name}</h3><p className="text-sm text-muted-foreground">{pb.value ? `${formatNumber(pb.value)} kg volume` : 'Your first one is close.'}</p></div><div className="ml-auto hidden text-right sm:block"><p className="font-mono text-2xl font-bold">{pb.value ? 'NEW' : '—'}</p><p className="text-[10px] uppercase tracking-widest text-muted-foreground">this cycle</p></div></div>
       <div className="card flex items-center gap-5 bg-[hsl(var(--secondary))] p-5 text-[hsl(var(--secondary-foreground))] dark:text-[hsl(var(--foreground))] sm:p-6"><div className="hidden h-14 w-14 place-items-center rounded-2xl bg-black/10 sm:grid"><ShieldCheck size={25} /></div><div><p className="text-xs font-bold uppercase tracking-[.16em] opacity-65">The quiet win</p><h3 className="mt-1 font-display text-xl font-bold">Rest days count too.</h3><p className="mt-1 text-sm opacity-75">Your streak is built from showing up honestly, not pushing through everything.</p></div><ArrowRight className="ml-auto hidden shrink-0 sm:block" /></div>
@@ -290,11 +282,6 @@ function WaterCard({ amount, onChange, className }: { amount: number; onChange: 
   return <div className={cx('card card-lift flex items-start gap-3 p-4', className)}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]"><Droplets size={19} /></span><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-muted-foreground">Water today</p><input data-testid="input-daily-water" type="number" min="0" step="0.25" inputMode="decimal" value={amount} onFocus={(event) => { if (amount === 0) event.currentTarget.select(); }} onChange={(event) => onChange(Math.max(0, Number(event.target.value) || 0))} className="mt-0.5 w-full bg-transparent font-display text-2xl font-bold outline-none" /><p className="truncate text-[11px] text-muted-foreground">Litres logged</p></div></div>;
 }
 
-function QuickAction({ href, icon, title, note, color }: { href: string; icon: ReactNode; title: string; note: string; color: string }) {
-  const colors: Record<string, string> = { teal: 'bg-[hsl(var(--secondary)/.13)] text-[hsl(var(--secondary))]', lime: 'bg-[hsl(var(--accent)/.75)] text-[hsl(var(--accent-foreground))]', coral: 'bg-[hsl(var(--destructive)/.13)] text-[hsl(var(--destructive))]' };
-  return <Link href={href} data-testid={`link-quick-${title.toLowerCase().replace(' ', '-')}`} className="pressable flex items-center gap-3 rounded-2xl border border-border p-3 hover:border-[hsl(var(--secondary)/.4)]"><span className={cx('grid h-10 w-10 shrink-0 place-items-center rounded-xl', colors[color])}>{icon}</span><span><strong className="block text-sm">{title}</strong><span className="block text-[11px] text-muted-foreground">{note}</span></span></Link>;
-}
-
 function ActivityRow({ activity, compact = false }: { activity: Activity; compact?: boolean }) {
   const Icon = iconForKind(activity.kind);
   const cardioMinutes = activity.exercises.reduce((total, exercise) => total + (exercise.durationMinutes ?? 0), 0);
@@ -311,6 +298,7 @@ function LogPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [bodyWeight, setBodyWeight] = useState('');
+  const [mood, setMood] = useState<WorkoutMood | undefined>();
   const [nightShift, setNightShift] = useState(false);
   const [exercises, setExercises] = useState<ExerciseEntry[]>([]);
   const [restSeconds, setRestSeconds] = useState(0);
@@ -357,7 +345,7 @@ function LogPage() {
     else if (kind === 'cardio') setExercises((rosterDay?.plannedCardio ?? []).map((planned) => cardioFromPlan(planned, date)));
     else setExercises([]);
   }, [date, kind, state.roster, state.rosterAnchorDate, state.rosterAnchorDayId, editingId]);
-  const resetForm = () => { const resetDate = todayKey(state); setEditingId(null); setKind(defaultActivityKindForRosterDay(rosterDayForDate(state, resetDate))); setDate(resetDate); setNotes(''); setBodyWeight(''); setNightShift(false); setExercises([]); setCardioTimers({}); };
+  const resetForm = () => { const resetDate = todayKey(state); setEditingId(null); setKind(defaultActivityKindForRosterDay(rosterDayForDate(state, resetDate))); setDate(resetDate); setNotes(''); setBodyWeight(''); setMood(undefined); setNightShift(false); setExercises([]); setCardioTimers({}); };
   const addExercise = () => setExercises((items) => [...items, { id: makeId('exercise'), name: '', weight: 0, reps: 8, sets: 3, setDetails: Array.from({ length: 3 }, () => ({ id: makeId('set'), weight: 0, reps: 8 })), notes: '', date, volume: 0 }]);
   const updateExercise = (id: string, patch: Partial<ExerciseEntry>) => setExercises((items) => items.map((item) => item.id === id ? { ...item, ...patch, volume: item.setDetails?.length ? getExerciseVolume(item.setDetails) : Number(patch.weight ?? item.weight) * Number(patch.reps ?? item.reps) * Number(patch.sets ?? item.sets) } : item));
   const addCardioWorkout = () => setExercises((items) => [...items, { id: makeId('cardio'), name: '', weight: 0, reps: 0, sets: 1, durationMinutes: 0, notes: '', date, volume: 0 }]);
@@ -471,13 +459,13 @@ function LogPage() {
       const firstSet = setDetails[0];
       return { ...item, date, setDetails: setDetails.map((set) => ({ ...set, durationMinutes: undefined })), weight: firstSet?.weight ?? 0, reps: firstSet?.reps ?? 0, sets: setDetails.length, durationMinutes: undefined, volume: getExerciseVolume(setDetails) };
     }) : kind === 'cardio' ? exercises.filter((item) => item.name.trim()).map((item) => ({ ...item, date, weight: 0, reps: 0, sets: 1, setDetails: undefined, durationMinutes: Math.max(0, Number(item.durationMinutes) || 0), volume: 0 })) : [];
-    const next: Activity = { id: editingId ?? makeId('activity'), date, loggedAt: new Date().toISOString(), kind, notes, isNightShift: nightShift, exercises: cleanExercises, ...(bodyWeight ? { bodyWeight: Number(bodyWeight) } : {}) };
+    const next: Activity = { id: editingId ?? makeId('activity'), date, loggedAt: new Date().toISOString(), kind, notes, isNightShift: nightShift, exercises: cleanExercises, ...(bodyWeight ? { bodyWeight: Number(bodyWeight) } : {}), ...(kind === 'workout' && mood ? { mood } : {}) };
     update({ activities: editingId ? state.activities.map((item) => item.id === editingId ? next : item) : [next, ...state.activities] });
     setSavedNotice(editingId ? 'Activity updated.' : kind === 'rest' ? 'Rest day counted. Good call.' : 'Saved. That one counts.');
     resetForm();
     window.setTimeout(() => setSavedNotice(''), 3500);
   };
-  const editActivity = (activity: Activity) => { setEditingId(activity.id); setKind(activity.kind); setDate(activity.date); setNotes(activity.notes); setBodyWeight(activity.bodyWeight?.toString() ?? ''); setNightShift(activity.isNightShift); setExercises(activity.exercises); setCardioTimers({}); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const editActivity = (activity: Activity) => { setEditingId(activity.id); setKind(activity.kind); setDate(activity.date); setNotes(activity.notes); setBodyWeight(activity.bodyWeight?.toString() ?? ''); setMood(activity.mood); setNightShift(activity.isNightShift); setExercises(activity.exercises); setCardioTimers({}); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const deleteActivity = (id: string) => { if (window.confirm('Delete this activity?')) update({ activities: state.activities.filter((item) => item.id !== id) }); };
   const activities = [...state.activities].sort((a, b) => b.loggedAt.localeCompare(a.loggedAt));
   return <div className="mx-auto max-w-[1320px] px-5 pb-10 sm:px-8 lg:px-10">
@@ -497,6 +485,7 @@ function LogPage() {
         </div>}
          {kind === 'cardio' && <div className="mt-6 rounded-2xl border border-[hsl(var(--accent)/.45)] bg-[hsl(var(--accent)/.2)] p-4"><div className="mb-4 flex items-start justify-between gap-3"><div className="flex gap-3"><Bike size={19} className="mt-0.5 shrink-0" /><div><p className="text-sm font-bold">Cardio workouts</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Start the timer when you begin. You can still edit the minutes manually.</p></div></div><button type="button" onClick={addCardioWorkout} data-testid="button-add-cardio-workout" className="pressable flex min-h-9 shrink-0 items-center gap-1 rounded-xl bg-[hsl(var(--secondary))] px-3 text-xs font-bold text-[hsl(var(--secondary-foreground))]"><Plus size={14} />Workout</button></div>{exercises.length > 0 && <div className="space-y-2">{exercises.map((workout, index) => { const timer = cardioTimers[workout.id] ?? { status: 'idle' as const, elapsedSeconds: Math.max(0, Number(workout.durationMinutes) || 0) * 60 }; return <div key={workout.id} className="rounded-xl border border-border bg-card/75 p-3"><div className="mb-2 flex items-center gap-2"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[hsl(var(--accent))] text-xs font-bold text-[hsl(var(--accent-foreground))]">{index + 1}</span><input data-testid={`input-cardio-workout-${workout.id}`} className="min-h-10 min-w-0 flex-1 bg-transparent px-1 text-sm font-bold outline-none placeholder:text-muted-foreground" placeholder="Workout name (e.g. Run)" value={workout.name} onChange={(e) => updateCardioWorkout(workout.id, { name: e.target.value })} /><button type="button" onClick={() => removeCardioWorkout(workout.id)} data-testid={`button-remove-cardio-workout-${workout.id}`} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><X size={15} /></button></div><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div className="max-w-[180px]"><MiniNumber label="Time (min)" value={workout.durationMinutes ?? 0} testId={`input-cardio-duration-${workout.id}`} onChange={(value) => updateCardioWorkout(workout.id, { durationMinutes: value })} /></div><div className="flex flex-wrap items-center gap-2"><span className="rounded-lg bg-muted px-2 py-2 font-mono text-xs font-bold">{formatElapsed(timer.elapsedSeconds)}</span>{timer.status === 'running' ? <button type="button" onClick={() => pauseCardioWorkout(workout.id)} data-testid={`button-pause-cardio-${workout.id}`} className="pressable min-h-9 rounded-xl border border-border px-3 text-xs font-bold">Pause</button> : timer.status !== 'ended' ? <button type="button" onClick={() => startCardioWorkout(workout.id)} data-testid={`button-start-cardio-${workout.id}`} className="pressable min-h-9 rounded-xl bg-[hsl(var(--secondary))] px-3 text-xs font-bold text-[hsl(var(--secondary-foreground))]">{timer.status === 'paused' ? 'Resume' : 'Start'}</button> : <span className="rounded-xl bg-muted px-3 py-2 text-xs font-bold text-muted-foreground">Ended</span>}{(timer.status === 'running' || timer.status === 'paused') && <button type="button" onClick={() => endCardioWorkout(workout.id)} data-testid={`button-end-cardio-${workout.id}`} className="pressable min-h-9 rounded-xl border border-[hsl(var(--destructive)/.35)] px-3 text-xs font-bold text-[hsl(var(--destructive))]">End</button>}{speechSupported && <button type="button" onClick={() => startVoiceForCardio(workout.id)} data-testid={`button-voice-cardio-${workout.id}`} aria-label="Fill cardio time by voice" className={cx('grid h-9 w-9 place-items-center rounded-xl border border-border text-muted-foreground', voiceListeningFor === `cardio-${workout.id}` && 'bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]')}><Mic size={14} /></button>}</div></div></div>; })}</div>}</div>}
         {kind === 'rest' && <div className="mt-6 rounded-2xl bg-[hsl(var(--primary))] p-5 text-[hsl(var(--primary-foreground))]"><div className="flex gap-3"><Moon size={19} className="mt-0.5 text-[hsl(var(--accent))]" /><div><p className="font-display text-lg font-bold">Recovery is an action.</p><p className="mt-1 text-xs leading-relaxed opacity-70">Planned rest keeps your streak alive and your next session honest.</p></div></div></div>}
+        {kind === 'workout' && <fieldset className="mt-5 rounded-2xl border border-border p-4"><legend className="px-1 text-sm font-bold">How are you feeling after this workout?</legend><div className="mt-1 flex gap-2"><button type="button" aria-pressed={mood === 'happy'} onClick={() => setMood(mood === 'happy' ? undefined : 'happy')} data-testid="button-mood-happy" className={cx('flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition-colors', mood === 'happy' ? 'border-[hsl(var(--secondary))] bg-[hsl(var(--secondary)/.12)] text-[hsl(var(--secondary))]' : 'border-border text-muted-foreground')}><Smile size={18} />Happy</button><button type="button" aria-pressed={mood === 'sad'} onClick={() => setMood(mood === 'sad' ? undefined : 'sad')} data-testid="button-mood-sad" className={cx('flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition-colors', mood === 'sad' ? 'border-[hsl(var(--destructive))] bg-[hsl(var(--destructive)/.1)] text-[hsl(var(--destructive))]' : 'border-border text-muted-foreground')}><Frown size={18} />Sad</button></div></fieldset>}
         <Field label="Notes" className="mt-5"><textarea data-testid="input-activity-notes" rows={3} placeholder="How did it feel? What should future-you know?" value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row"><button type="submit" data-testid="button-save-activity" className="pressable flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-[hsl(var(--primary))] px-5 text-sm font-bold text-[hsl(var(--primary-foreground))]">{editingId ? <Check size={17} /> : <Plus size={17} />}{editingId ? 'Update activity' : `Save ${kindName[kind].toLowerCase()}`}</button>{editingId && <button type="button" onClick={resetForm} data-testid="button-cancel-edit" className="min-h-12 rounded-2xl border border-border px-5 text-sm font-bold text-muted-foreground">Cancel</button>}</div>
         <p className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground"><Clock3 size={13} />Your logical day rolls at {state.settings.dayRolloverHour}:00. The date above is what streaks use.</p>
@@ -558,8 +547,11 @@ function RosterPage() {
 
 function InsightsPage() {
   const { state } = useApp();
-  const weightData = [...state.activities].filter((item) => item.bodyWeight).sort((a, b) => a.date.localeCompare(b.date)).slice(-8);
-  const workoutData = getLastDays(state.activities, todayKey(state), 8).map((date) => ({ date, value: state.activities.filter((item) => item.date === date && item.kind === 'workout').length }));
+  const weightData = [...state.activities].filter((item) => item.bodyWeight).sort((a, b) => a.date.localeCompare(b.date)).slice(-30);
+  const workoutData = getLastDays(state.activities, todayKey(state), 8).map((date) => {
+    const workouts = state.activities.filter((item) => item.date === date && item.kind === 'workout').sort((a, b) => b.loggedAt.localeCompare(a.loggedAt));
+    return { date, value: workouts.length, mood: workouts[0]?.mood };
+  });
   const stepHistory = Array.from({ length: 7 }, (_, index) => {
     const date = shiftDate(todayKey(state), index - 6);
     return { date, steps: state.dailySteps?.[date] ?? 0, water: state.dailyWater?.[date] ?? 0 };
@@ -576,8 +568,21 @@ function InsightsPage() {
   const maxSteps = Math.max(...stepHistory.map((item) => item.steps), 1);
   const maxWater = Math.max(...stepHistory.map((item) => item.water), 1);
   return <div className="mx-auto max-w-[1320px] px-5 pb-10 sm:px-8 lg:px-10"><PageIntro eyebrow="Signals, not scores" title="Insights" description="Look for the pattern. The useful trend is usually clearer than the perfect number." />
-    <div className="grid gap-5 lg:grid-cols-2"><ChartCard title="Body weight" subtitle={`Last ${weightData.length || 0} weigh-ins · ${state.settings.units}`} icon={<Weight size={19} />}><div className="flex h-44 items-end gap-2 sm:gap-4">{(weightData.length ? weightData : [{ date: todayKey(state), bodyWeight: 0 }]).map((item, i, arr) => { const values = arr.map((x) => x.bodyWeight || 0); const min = Math.min(...values) - 1; const max = Math.max(...values) + 1; const height = item.bodyWeight ? ((item.bodyWeight - min) / (max - min)) * 75 + 15 : 10; return <div key={item.date + i} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-2"><span className="font-mono text-[10px] text-muted-foreground">{item.bodyWeight ? item.bodyWeight.toFixed(1) : '—'}</span><div className="w-full max-w-8 rounded-t-lg bg-[hsl(var(--secondary))]" style={{ height: `${height}%` }} /><span className="text-[9px] text-muted-foreground">{formatDate(item.date, { month: 'numeric', day: 'numeric' })}</span></div>; })}</div></ChartCard>
-      <ChartCard title="Workout frequency" subtitle="Strength sessions · last 8 logical days" icon={<ActivityIcon size={19} />}><div className="flex h-44 items-end gap-2 sm:gap-4">{workoutData.map((item) => <div key={item.date} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-2"><span className="font-mono text-[10px] text-muted-foreground">{item.value || ''}</span><div className={cx('w-full max-w-8 rounded-t-lg', item.value ? 'bg-[hsl(var(--accent))]' : 'bg-muted')} style={{ height: `${item.value ? (item.value / maxVolume) * 70 + 15 : 10}%` }} /><span className="text-[9px] text-muted-foreground">{formatDate(item.date, { weekday: 'short' }).slice(0, 2)}</span></div>)}</div></ChartCard>
+    <div className="grid gap-5 lg:grid-cols-2">
+      <ChartCard title="Body weight" subtitle={`Last ${weightData.length} weigh-ins · ${state.settings.units}`} icon={<Weight size={19} />}>
+        <div className="h-52 w-full">
+          {weightData.length ? <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={weightData} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
+              <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3" />
+              <XAxis dataKey="date" tickFormatter={(date: string) => formatDate(date, { month: 'numeric', day: 'numeric' })} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} minTickGap={18} interval="preserveStartEnd" />
+              <YAxis domain={['dataMin - 1', 'dataMax + 1']} tickFormatter={(value: number) => value.toFixed(1)} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={42} />
+              <Tooltip formatter={(value) => [`${Number(value).toFixed(1)} ${state.settings.units}`, 'Body weight']} labelFormatter={(date) => formatDate(String(date), { weekday: 'short', month: 'short', day: 'numeric' })} contentStyle={{ borderRadius: 8, border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--card))' }} />
+              <Line type="monotone" dataKey="bodyWeight" stroke="hsl(var(--secondary))" strokeWidth={2.5} dot={{ r: 2.5, fill: 'hsl(var(--secondary))', strokeWidth: 0 }} activeDot={{ r: 5, strokeWidth: 0 }} />
+            </LineChart>
+          </ResponsiveContainer> : <div className="grid h-full place-items-center text-center text-xs text-muted-foreground">Log a weigh-in to start a trend.</div>}
+        </div>
+      </ChartCard>
+      <ChartCard title="Workout frequency" subtitle="Strength sessions · last 8 logical days" icon={<ActivityIcon size={19} />}><div className="flex h-44 items-end gap-2 sm:gap-4">{workoutData.map((item) => <div key={item.date} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-2"><span className="font-mono text-[10px] text-muted-foreground">{item.value || ''}</span><span className="grid h-4 place-items-center" title={item.mood ? `Felt ${item.mood}` : undefined} aria-label={item.mood ? `Felt ${item.mood}` : undefined}>{item.mood === 'happy' ? <Smile size={14} className="text-[hsl(var(--secondary))]" /> : item.mood === 'sad' ? <Frown size={14} className="text-destructive" /> : null}</span><div className={cx('w-full max-w-8 rounded-t-lg', item.value ? 'bg-[hsl(var(--accent))]' : 'bg-muted')} style={{ height: `${item.value ? (item.value / maxVolume) * 70 + 15 : 10}%` }} /><span className="text-[9px] text-muted-foreground">{formatDate(item.date, { weekday: 'short' }).slice(0, 2)}</span></div>)}</div></ChartCard>
       <ChartCard title="Movement + hydration" subtitle="Steps and water · last 7 logical days" icon={<Droplets size={19} />}><div className="space-y-3">{stepHistory.map(({ date, steps, water }) => <div key={date} className="grid grid-cols-[32px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2.5"><span className="text-[10px] font-bold uppercase tracking-[.14em] text-muted-foreground">{formatDate(date, { weekday: 'short' }).slice(0, 2)}</span><div className="flex min-w-0 items-center gap-1.5"><span className="w-8 shrink-0 font-mono text-[9px] text-muted-foreground">{steps.toLocaleString()}</span><div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-[hsl(var(--secondary))]" style={{ width: `${Math.min(100, (steps / maxSteps) * 100)}%` }} /></div></div><div className="flex min-w-0 items-center gap-1.5"><span className="w-8 shrink-0 font-mono text-[9px] text-muted-foreground">{water.toFixed(1)}L</span><div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-[hsl(var(--accent))]" style={{ width: `${Math.min(100, (water / maxWater) * 100)}%` }} /></div></div></div> )}</div></ChartCard>
       <ChartCard title="Volume moved" subtitle="A running total of your logged lifts" icon={<BarChart3 size={19} />}><div className="flex items-end justify-between gap-4"><div><p className="font-display text-4xl font-bold">{formatNumber(volume)}</p><p className="mt-1 text-xs text-muted-foreground">{state.settings.units} total volume</p></div><div className="flex h-24 items-end gap-1.5">{(() => {
         const recentDays = getLastDays(state.activities, todayKey(state), 12).map((date) => ({ date, value: totalVolume(state.activities.filter((item) => item.date === date)) }));
@@ -588,8 +593,8 @@ function InsightsPage() {
         </div>; });
       })()}</div></div><div className="mt-5 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-[hsl(var(--secondary))]" style={{ width: `${Math.min(100, (volume / 12000) * 100)}%` }} /></div></ChartCard>
       <ChartCard title="Personal-best progress" subtitle="Your strongest recorded exercise volumes" icon={<Trophy size={19} />}><div className="space-y-4"><PBBar label={pb.name} value={pb.value} max={Math.max(pb.value, 1200)} color="teal" /><PBBar label="Total cycle volume" value={volume} max={Math.max(volume, 12000)} color="lime" /><div className="rounded-2xl bg-muted/70 p-3 text-xs leading-relaxed text-muted-foreground"><strong className="text-foreground">New Personal Best!</strong> Your {pb.name.toLowerCase()} volume is the high mark in this local log.</div></div></ChartCard></div>
-    <section className="card mt-5 overflow-hidden"><div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Fun volume comparison</p><h3 className="mt-1 font-display text-2xl font-bold">{volumeComparison.name}</h3><p className="mt-1 text-sm text-muted-foreground">{volume > 0 ? `You moved about ${formatNumber(volume)} kg. That is a lot of ${volumeComparison.name.toLowerCase()} energy.` : `Your first goal is ${volumeComparison.next} at ${comparisonThresholds[0].toLocaleString()} kg.`}</p></div><div className="rounded-2xl bg-[hsl(var(--accent))] px-4 py-3 text-center"><p className="font-display text-2xl font-bold text-[hsl(var(--accent-foreground))]">{volumeComparison.next}</p><p className="text-[10px] font-bold uppercase tracking-widest text-[hsl(var(--accent-foreground)/.7)]">next horizon</p></div></div><div className="grid gap-2 p-5 sm:grid-cols-9 sm:p-6">{comparisonNames.map((name, index) => <div key={name} className={cx('rounded-xl p-3 text-center', index <= volumeComparison.index ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'bg-muted text-muted-foreground')}><p className="font-display text-xs font-bold">{name}</p><p className="mt-1 font-mono text-[9px]">{comparisonThresholds[index].toLocaleString()} kg</p></div>)}</div></section>
-    <section className="card mt-5 overflow-hidden"><div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Cardio time comparison</p><h3 className="mt-1 font-display text-2xl font-bold">{cardioComparison.name}</h3><p className="mt-1 text-sm text-muted-foreground">You’ve logged {formatCardioTime(cardioMinutes)} of cardio. {cardioMinutes > 0 ? `That’s ${cardioComparison.name.toLowerCase()} time.` : 'Your first time milestone is waiting.'}</p></div><div className="rounded-2xl bg-[hsl(var(--secondary))] px-4 py-3 text-center text-[hsl(var(--secondary-foreground))]"><p className="font-display text-2xl font-bold">{cardioComparison.next}</p><p className="text-[10px] font-bold uppercase tracking-widest opacity-70">next · {formatCardioTime(cardioComparison.nextThreshold)}</p></div></div><div className="grid gap-2 p-5 sm:grid-cols-4 lg:grid-cols-6">{cardioComparisonNames.map((name, index) => <div key={name} className={cx('rounded-xl p-3 text-center', cardioMinutes >= cardioComparisonThresholds[index] ? 'bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]' : 'bg-muted text-muted-foreground')}><p className="font-display text-xs font-bold">{name}</p><p className="mt-1 font-mono text-[9px]">{formatCardioTime(cardioComparisonThresholds[index])}</p></div>)}</div></section>
+    <section className="card mt-5 overflow-hidden"><div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Fun volume comparison</p><h3 className="mt-1 font-display text-2xl font-bold">{volumeComparison.threshold ? `${formatNumber(volumeComparison.threshold)} ${state.settings.units} is as much as a ${volumeComparison.name}` : 'Your first comparison is waiting'}</h3><p className="mt-1 text-sm text-muted-foreground">{volume > 0 ? `You’ve moved ${formatNumber(volume)} ${state.settings.units} in total.` : 'Log your first lift to uncover your first comparison.'}</p></div><div className="rounded-2xl bg-[hsl(var(--accent))] px-4 py-3 text-center"><p className="font-display text-2xl font-bold text-[hsl(var(--accent-foreground))]">{formatNumber(volume)} {state.settings.units}</p><p className="text-[10px] font-bold uppercase tracking-widest text-[hsl(var(--accent-foreground)/.7)]">volume moved</p></div></div></section>
+    <section className="card mt-5 overflow-hidden"><div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Cardio time comparison</p><h3 className="mt-1 font-display text-2xl font-bold">{cardioComparison.threshold ? `${formatCardioTime(cardioComparison.threshold)} is about ${cardioComparison.name}` : 'Your first time comparison is waiting'}</h3><p className="mt-1 text-sm text-muted-foreground">You’ve logged {formatCardioTime(cardioMinutes)} of cardio in total.</p></div><div className="rounded-2xl bg-[hsl(var(--secondary))] px-4 py-3 text-center text-[hsl(var(--secondary-foreground))]"><p className="font-display text-2xl font-bold">{formatCardioTime(cardioMinutes)}</p><p className="text-[10px] font-bold uppercase tracking-widest opacity-70">cardio logged</p></div></div></section>
   </div>;
 }
 
@@ -665,29 +670,61 @@ function MiniNumber({ label, value, onChange, testId }: { label: string; value: 
 function EmptyState({ title, detail, icon }: { title: string; detail: string; icon: ReactNode }) { return <div className="flex flex-col items-center justify-center px-5 py-12 text-center"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-muted text-muted-foreground">{icon}</span><h3 className="mt-3 font-display font-bold">{title}</h3><p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">{detail}</p></div>; }
 function NotFoundPage() { return <div className="mx-auto max-w-xl px-5 py-20 text-center"><div className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-[hsl(var(--accent))]"><CircleHelp /></div><h2 className="mt-5 font-display text-3xl font-bold">That page is off roster.</h2><p className="mt-2 text-muted-foreground">Let’s get you back to today.</p><Link href="/" data-testid="link-not-found-home" className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-2xl bg-[hsl(var(--primary))] px-5 text-sm font-bold text-[hsl(var(--primary-foreground))]">Back to today <ArrowRight size={16} /></Link></div>; }
 
-const comparisonNames = ['Baby Unicorn', 'Unicorn', 'Angry Unicorn', 'Horse', 'Rhinoceros', 'T-Rex', 'Dragon', 'Giant', 'Godzilla', 'Titan', 'Mega Beast'];
-const comparisonThresholds = [250, 500, 1000, 2500, 5000, 10000, 20000, 40000, 80000, 160000, 320000];
-const cardioComparisonNames = ['Quick loop', 'Hour outside', 'Feature film', 'Half-day adventure', 'Full-day adventure', '24 hours moving', 'A workweek moving', '100 hours moving', '250 hours moving', '500 hours moving', '1,000 hours moving'];
-const cardioComparisonThresholds = [30, 60, 120, 240, 480, 1440, 2400, 6000, 15000, 30000, 60000];
+const comparisonMilestones = [
+  { threshold: 250, name: 'Baby Unicorn' },
+  { threshold: 500, name: 'Pony' },
+  { threshold: 750, name: 'Unicorn' },
+  { threshold: 1000, name: 'Angry Unicorn' },
+  { threshold: 1500, name: 'Donkey' },
+  { threshold: 2000, name: 'Horse' },
+  { threshold: 2500, name: 'War Horse' },
+  { threshold: 3500, name: 'Zebra' },
+  { threshold: 5000, name: 'Rhino' },
+  { threshold: 7500, name: 'Hippo' },
+  { threshold: 10000, name: 'T-Rex' },
+  { threshold: 15000, name: 'Mammoth' },
+  { threshold: 20000, name: 'Dragon' },
+  { threshold: 30000, name: 'Wyvern' },
+  { threshold: 40000, name: 'Giant' },
+  { threshold: 60000, name: 'Cyclops' },
+  { threshold: 80000, name: 'Godzilla' },
+  { threshold: 120000, name: 'Kraken' },
+  { threshold: 160000, name: 'Titan' },
+  { threshold: 240000, name: 'Leviathan' },
+  { threshold: 320000, name: 'Mega Beast' },
+];
+const cardioEvents = [
+  { threshold: 30, name: 'TV episode' },
+  { threshold: 60, name: 'Concert set' },
+  { threshold: 120, name: 'Feature film' },
+  { threshold: 240, name: 'Long-haul flight' },
+  { threshold: 480, name: 'Full workday' },
+  { threshold: 1440, name: 'Full day' },
+  { threshold: 2400, name: '40-hour workweek' },
+  { threshold: 6000, name: '100 hours moving' },
+  { threshold: 15000, name: '250 hours moving' },
+  { threshold: 30000, name: '500 hours moving' },
+  { threshold: 60000, name: '1,000 hours moving' },
+];
 function comparisonFor(volume: number) {
-  const index = comparisonThresholds.reduce((result, threshold, milestoneIndex) => volume >= threshold ? milestoneIndex : result, -1);
-  const nextIndex = Math.min(index + 1, comparisonNames.length - 1);
+  const milestone = comparisonMilestones.reduce((result, candidate) => volume >= candidate.threshold ? candidate : result, undefined as typeof comparisonMilestones[number] | undefined);
   return {
-    index,
-    name: index >= 0 ? comparisonNames[index] : 'Fresh start',
-    next: comparisonNames[nextIndex],
+    name: milestone?.name ?? 'Fresh start',
+    threshold: milestone?.threshold ?? 0,
   };
 }
 function cardioComparisonFor(minutes: number) {
-  const completedIndex = cardioComparisonThresholds.reduce((result, threshold, index) => minutes >= threshold ? index : result, -1);
-  const nextIndex = Math.min(completedIndex + 1, cardioComparisonNames.length - 1);
+  const event = cardioEvents.reduce((result, candidate) => minutes >= candidate.threshold ? candidate : result, undefined as typeof cardioEvents[number] | undefined);
   return {
-    name: completedIndex >= 0 ? cardioComparisonNames[completedIndex] : 'First lap awaits',
-    next: cardioComparisonNames[nextIndex],
-    nextThreshold: cardioComparisonThresholds[nextIndex],
+    name: event?.name ?? '',
+    threshold: event?.threshold ?? 0,
   };
 }
-function formatCardioTime(minutes: number) { return minutes < 60 ? `${formatNumber(minutes)} min` : `${formatNumber(minutes / 60)} hr`; }
+function formatCardioTime(minutes: number) {
+  if (minutes < 60) return `${formatNumber(minutes)} min`;
+  const hours = minutes / 60;
+  return hours >= 100 ? `${formatNumber(hours)} hr (${formatNumber(hours / 24)} days)` : `${formatNumber(hours)} hr`;
+}
 function formatNumber(value: number) { return new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(Math.round(value * 10) / 10); }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null; }
 function isPlannedExerciseList(value: unknown): value is PlannedExercise[] {

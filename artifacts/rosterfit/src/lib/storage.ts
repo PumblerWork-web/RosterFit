@@ -1,6 +1,7 @@
 export type Theme = 'light' | 'dark';
 export type UnitSystem = 'kg' | 'lb';
 export type ActivityKind = 'workout' | 'cardio' | 'rest';
+export type WorkoutMood = 'happy' | 'sad';
 export type RosterActivityKind = ActivityKind | 'mixed';
 export type RosterKind = 'day' | 'night' | 'off';
 
@@ -63,6 +64,7 @@ export type Activity = {
   notes: string;
   exercises: ExerciseEntry[];
   bodyWeight?: number;
+  mood?: WorkoutMood;
   isNightShift: boolean;
 };
 
