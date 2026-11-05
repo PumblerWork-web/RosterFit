@@ -159,7 +159,7 @@ function Shell() {
   return <div className="app-shell flex min-h-[100dvh] md:pl-[238px]">
     <aside className="sidebar fixed inset-y-0 left-0 z-30 hidden w-[238px] flex-col px-4 py-5 md:flex">
       <Link href="/" className="mb-9 flex items-center gap-3 px-3" data-testid="link-brand">
-        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-[hsl(var(--accent))] text-[hsl(var(--primary))]"><ActivityIcon size={20} strokeWidth={2.8} /></span>
+        <img src="/rosterfit.png" alt="" className="h-10 w-10 shrink-0 rounded-2xl object-contain" />
         <span><strong className="font-display text-lg tracking-tight">RosterFit</strong><span className="block text-[10px] uppercase tracking-[.2em] opacity-55">Shift by shift</span></span>
       </Link>
       <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[.2em] opacity-40">Your pocket coach</p>
